@@ -39,9 +39,9 @@ interface Pagination {
 }
 
 interface FilterOption {
-  id: number;
-  name?: string;
-  label?: string;
+  id: string;
+  name: string;
+  label: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -130,9 +130,12 @@ export default function WelcomeScreen() {
         const response = await fetchCommunicationsFilters();
         if (response.success && response.communication_types) {
           setFilters(response.communication_types);
+        } else {
+          setFilters(COMMUNICATION_TYPES);
         }
       } catch (error) {
         console.error('Failed to load filter options:', error);
+        setFilters(COMMUNICATION_TYPES);
       }
     };
 
@@ -211,8 +214,8 @@ export default function WelcomeScreen() {
             >
               <option value="">All Types</option>
               {filters.map((filter) => (
-                <option key={filter.id} value={filter.name || ''}>
-                  {filter.label || filter.name}
+                <option key={filter.id} value={filter.name}>
+                  {filter.label}
                 </option>
               ))}
             </select>
@@ -412,3 +415,21 @@ export default function WelcomeScreen() {
     </div>
   );
 }
+
+const COMMUNICATION_TYPES: FilterOption[] = [
+  { id: 'MTOP', name: 'MTOP', label: 'MTOP' },
+  { id: 'TRAVEL_ORDER', name: 'TRAVEL_ORDER', label: 'Travel Order' },
+  { id: 'SB_RESOLUTION', name: 'SB_RESOLUTION', label: 'SB Resolution' },
+  { id: 'SB_ORDINANCE', name: 'SB_ORDINANCE', label: 'SB Ordinance' },
+  { id: 'APPLICATION_LEAVE', name: 'APPLICATION_LEAVE', label: 'Application Leave' },
+  { id: 'MEMO', name: 'MEMO', label: 'Memo' },
+  { id: 'NOTICE_HEARING', name: 'NOTICE_HEARING', label: 'Notice Hearing' },
+  { id: 'INVITATION', name: 'INVITATION', label: 'Invitation' },
+  { id: 'ENDORSEMENT', name: 'ENDORSEMENT', label: 'Endorsement' },
+  { id: 'DSSC', name: 'DSSC', label: 'DSSC' },
+  { id: 'MADAC', name: 'MADAC', label: 'MADAC' },
+  { id: 'DOE', name: 'DOE', label: 'DOE' },
+  { id: 'SOLICITATION', name: 'SOLICITATION', label: 'Solicitation' },
+  { id: 'TENT_REQUEST', name: 'TENT_REQUEST', label: 'Tent Request' },
+  { id: 'OTHER', name: 'OTHER', label: 'Other' },
+];

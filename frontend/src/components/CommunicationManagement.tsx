@@ -37,6 +37,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
@@ -79,6 +80,31 @@ const typeColors: Record<string, string> = {
   OTHER: 'bg-gray-100 text-gray-800',
 };
 
+const defaultTypes = [
+  'MTOP',
+  'TRAVEL_ORDER',
+  'SB_RESOLUTION',
+  'SB_ORDINANCE',
+  'APPLICATION_LEAVE',
+  'MEMO',
+  'NOTICE_HEARING',
+  'INVITATION',
+  'ENDORSEMENT',
+  'DSSC',
+  'MADAC',
+  'DOE',
+  'SOLICITATION',
+  'TENT_REQUEST',
+  'OTHER',
+];
+
+const defaultStatuses = [
+  'RECEIVED',
+  'RELEASED',
+  'COMPLETED',
+  'PULLED_OUT',
+];
+
 export default function CommunicationManagement() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -105,6 +131,7 @@ export default function CommunicationManagement() {
       const response = await api.get('/api/communications/filter-options');
       return response.data;
     },
+    initialData: { success: true, data: { types: defaultTypes, statuses: defaultStatuses } },
   });
 
   // Fetch communications
@@ -347,7 +374,7 @@ export default function CommunicationManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All types</SelectItem>
-                  {filterOptions?.data?.types?.map((type) => (
+                  {(filterOptions?.data?.types || defaultTypes).map((type) => (
                     <SelectItem key={type} value={type}>
                       {type.replace(/_/g, ' ')}
                     </SelectItem>
@@ -367,7 +394,7 @@ export default function CommunicationManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All statuses</SelectItem>
-                  {filterOptions?.data?.statuses?.map((status) => (
+                  {(filterOptions?.data?.statuses || defaultStatuses).map((status) => (
                     <SelectItem key={status} value={status}>
                       {status.replace(/_/g, ' ')}
                     </SelectItem>
@@ -583,7 +610,8 @@ export default function CommunicationManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {filterOptions?.data?.types?.map((type) => (
+                    <SelectItem value="">All types</SelectItem>
+                    {(filterOptions?.data?.types || defaultTypes).map((type) => (
                       <SelectItem key={type} value={type}>
                         {type.replace(/_/g, ' ')}
                       </SelectItem>
@@ -602,7 +630,8 @@ export default function CommunicationManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {filterOptions?.data?.statuses?.map((status) => (
+                    <SelectItem value="">All statuses</SelectItem>
+                    {(filterOptions?.data?.statuses || defaultStatuses).map((status) => (
                       <SelectItem key={status} value={status}>
                         {status.replace(/_/g, ' ')}
                       </SelectItem>

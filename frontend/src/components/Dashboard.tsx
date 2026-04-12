@@ -28,13 +28,13 @@ import { motion } from 'framer-motion';
 import { get } from '@/api/requests';
 
 interface DashboardStats {
-  total_ordinances: StatValue;
-  total_resolutions: StatValue;
-  active_sessions: StatValue;
-  public_consultations: StatValue;
-  pending_legislation: StatValue;
-  active_members: StatValue;
-  active_committees: StatValue;
+  total_communications: StatValue;
+  received: StatValue;
+  for_signing: StatValue;
+  signed: StatValue;
+  released: StatValue;
+  total_users: StatValue;
+  total_documents: StatValue;
 }
 
 interface StatValue {
@@ -45,10 +45,10 @@ interface StatValue {
 
 interface TrendData {
   month: string;
-  ordinances: number;
-  resolutions: number;
-  sessions: number;
-  consultations: number;
+  received: number;
+  for_signing: number;
+  signed: number;
+  released: number;
 }
 
 interface StatusDistribution {
@@ -98,18 +98,23 @@ interface DashboardData {
   stats: DashboardStats;
   trends: TrendData[];
   status_distribution: StatusDistribution[];
-  committee_activity: CommitteeActivity[];
-  priorities: Priority[];
+  committee_activity?: CommitteeActivity[];
+  priorities?: Priority[];
   recent_activities: Activity[];
-  member_analytics: MemberAnalytic[];
+  member_analytics?: MemberAnalytic[];
 }
 
 // Map audit action strings to readable labels
 const actionLabel: Record<string, string> = {
-  create: 'created',
-  update: 'updated',
-  delete: 'deleted',
-  restore: 'restored',
+  CREATE: 'created',
+  UPDATE: 'updated',
+  DELETE: 'deleted',
+  LOGIN: 'logged in',
+  LOGOUT: 'logged out',
+  ACCESS: 'accessed',
+  EXPORT: 'exported',
+  IMPORT: 'imported',
+  OTHER: 'performed',
 };
 
 // Initials from a full name string
@@ -132,10 +137,15 @@ const typeBadgeClass: Record<string, string> = {
 
 // Color per audit action
 const actionBadgeClass: Record<string, string> = {
-  create:  'bg-emerald-100 text-emerald-700',
-  update:  'bg-yellow-100 text-yellow-700',
-  delete:  'bg-red-100 text-red-700',
-  restore: 'bg-sky-100 text-sky-700',
+  CREATE: 'bg-emerald-100 text-emerald-700',
+  UPDATE: 'bg-yellow-100 text-yellow-700',
+  DELETE: 'bg-red-100 text-red-700',
+  LOGIN: 'bg-sky-100 text-sky-700',
+  LOGOUT: 'bg-slate-100 text-slate-700',
+  ACCESS: 'bg-indigo-100 text-indigo-700',
+  EXPORT: 'bg-cyan-100 text-cyan-700',
+  IMPORT: 'bg-purple-100 text-purple-700',
+  OTHER: 'bg-gray-100 text-gray-700',
 };
 
 export default function Dashboard() {
@@ -252,10 +262,10 @@ export default function Dashboard() {
     stats,
     trends,
     status_distribution,
-    committee_activity,
-    priorities,
+    committee_activity = [],
+    priorities = [],
     recent_activities,
-    member_analytics,
+    member_analytics = [],
   } = dashboardData;
 
   return (
@@ -701,7 +711,7 @@ export default function Dashboard() {
                       data={Object.entries(activeMemberAnalytics.actions_breakdown).map(([name, value]) => ({
                         name: name.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
                         value,
-                      }))}
+                      }))
                       cx="50%" cy="50%"
                       innerRadius={35}
                       outerRadius={60}
