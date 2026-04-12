@@ -1,0 +1,24 @@
+{
+  "name": "SMART-SB",
+  "short_name": "SMART-SB",
+  "description": "This web based application will help SB to enhance legislative document management and legislation tracking.",
+  "start_url": "/smart-sb/",
+  "scope": "/smart-sb/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/smart-sb/192by192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/smart-sb/512by512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

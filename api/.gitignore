@@ -1,0 +1,15 @@
+.env
+vendor
+storage/documents
+storage/cache
+storage/backups
+storage/events
+storage/legislative_agendas
+storage/logs
+storage/news
+storage/consultations
+storage/profile-photos
+
+# composer.lock
+*.sql
+*.py
