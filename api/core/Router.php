@@ -109,10 +109,23 @@ class Router {
         }
         
         // Convert route path to regex pattern
-        // Replace {param} with named regex capture groups
-        $pattern = preg_replace('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', '(?P<$1>[^/]+)', $routePath);
+        // First, escape all regex special characters except { and }
+        $pattern = preg_replace_callback(
+            '/([.+*?^$|()\\[\\]\\\\-])|(\{[a-zA-Z_][a-zA-Z0-9_]*\})/u',
+            function($matches) {
+                // If it's a parameter placeholder, keep it; otherwise escape it
+                if (strpos($matches[0], '{') === 0) {
+                    return $matches[0]; // Keep parameter placeholders
+                }
+                return '\\' . $matches[0]; // Escape special chars
+            },
+            $routePath
+        );
         
-        // Escape forward slashes for regex
+        // Replace {param} with named regex capture groups
+        $pattern = preg_replace('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', '(?P<$1>[^/]+)', $pattern);
+        
+        // Wrap in regex delimiters with anchors
         $pattern = '#^' . $pattern . '$#';
         
         // Match URI against pattern
