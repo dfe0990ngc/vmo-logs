@@ -110,8 +110,8 @@ export default function CommunicationManagement() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebounce(search, 500);
-  const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null);
@@ -142,8 +142,8 @@ export default function CommunicationManagement() {
       params.append('page', page.toString());
       params.append('limit', '10');
       if (debouncedSearch) params.append('search', debouncedSearch);
-      if (typeFilter) params.append('type', typeFilter);
-      if (statusFilter) params.append('status', statusFilter);
+      if (typeFilter !== 'all') params.append('type', typeFilter);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
 
       const response = await api.get(`/api/communications?${params}`);
       return response.data;
@@ -373,7 +373,7 @@ export default function CommunicationManagement() {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All types</SelectItem>
+                  <SelectItem value="all">All types</SelectItem>
                   {(filterOptions?.data?.types || defaultTypes).map((type) => (
                     <SelectItem key={type} value={type}>
                       {type.replace(/_/g, ' ')}
@@ -393,7 +393,7 @@ export default function CommunicationManagement() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All statuses</SelectItem>
+                  <SelectItem value="all">All statuses</SelectItem>
                   {(filterOptions?.data?.statuses || defaultStatuses).map((status) => (
                     <SelectItem key={status} value={status}>
                       {status.replace(/_/g, ' ')}
@@ -408,8 +408,8 @@ export default function CommunicationManagement() {
                 variant="outline"
                 onClick={() => {
                   setSearch('');
-                  setTypeFilter('');
-                  setStatusFilter('');
+                  setTypeFilter('all');
+                  setStatusFilter('all');
                   setPage(1);
                 }}
                 className="w-full"
@@ -610,7 +610,7 @@ export default function CommunicationManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All types</SelectItem>
+                    <SelectItem value="all">All types</SelectItem>
                     {(filterOptions?.data?.types || defaultTypes).map((type) => (
                       <SelectItem key={type} value={type}>
                         {type.replace(/_/g, ' ')}
@@ -630,7 +630,7 @@ export default function CommunicationManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All statuses</SelectItem>
+                    <SelectItem value="all">All statuses</SelectItem>
                     {(filterOptions?.data?.statuses || defaultStatuses).map((status) => (
                       <SelectItem key={status} value={status}>
                         {status.replace(/_/g, ' ')}
