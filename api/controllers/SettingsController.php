@@ -18,7 +18,6 @@ class SettingsController extends Controller
         $files = glob(RATE_LIMIT_CACHE_PATH . '/*.json');
 
         Database::query("DELETE FROM refresh_tokens WHERE expires_at < NOW()");
-        Database::query("DELETE FROM login_attempts WHERE attempted_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
 
         foreach ($files as $file) {
             if (is_file($file)) {

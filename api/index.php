@@ -65,6 +65,9 @@ $router->post('/api/users', [UserController::class, 'create'], [AuthMiddleware::
 $router->put('/api/users/{id}', [UserController::class, 'update'], [AuthMiddleware::class]);
 $router->delete('/api/users/{id}', [UserController::class, 'delete'], [AuthMiddleware::class]);
 
+$router->get('/api/my-profile', [UserController::class, 'getProfile'], [AuthMiddleware::class]);
+$router->put('/api/my-profile', [UserController::class, 'updateProfile'], [AuthMiddleware::class]);
+
 // communication routes (require authentication)
 // NOTE: Specific routes must come BEFORE generic routes with parameters
 $router->get('/api/ajax-communications', [CommunicationController::class, 'indexJSON']);

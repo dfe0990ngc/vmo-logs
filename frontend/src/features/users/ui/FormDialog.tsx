@@ -169,10 +169,10 @@ const FormDialog = memo(
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Admin">Administrator</SelectItem>
-                    <SelectItem value="Member">Member</SelectItem>
-                    {/* <SelectItem value="Staff">Staff</SelectItem> */}
-                    <SelectItem value="Uploader">Uploader</SelectItem>
-                    <SelectItem value="Tracker">Tracker</SelectItem>
+                    {/* <SelectItem value="Member">Member</SelectItem> */}
+                    <SelectItem value="Staff">Staff</SelectItem>
+                    {/* <SelectItem value="Uploader">Uploader</SelectItem> */}
+                    {/* <SelectItem value="Tracker">Tracker</SelectItem> */}
                   </SelectContent>
                 </Select>
               </div>

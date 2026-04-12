@@ -139,7 +139,7 @@ class DashboardController extends Controller
         ];
 
         $totalUsers = (int) Database::fetch("SELECT COUNT(*) cnt FROM users")['cnt'];
-        $totalDocs  = (int) Database::fetch("SELECT COUNT(*) cnt FROM documents")['cnt'];
+        $totalDocs  = (int) Database::fetch("SELECT COUNT(*) cnt FROM communications WHERE file_path IS NOT NULL")['cnt'];
 
         return [
             'total_communications' => $this->metric($current['total'],       $previous['total']),
