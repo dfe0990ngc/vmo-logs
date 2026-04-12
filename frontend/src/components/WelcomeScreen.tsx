@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, FileText, Calendar, Users, Building2, Tag, ChevronRight, X, Loader2 } from 'lucide-react';
-import Navigation from '../components/layouts/Navigation';
+import { Search, Filter, FileText, Calendar, ChevronRight, X, Loader2 } from 'lucide-react';
+import Navigation from './layouts/Navigation';
 import {
   fetchCommunications,
   fetchCommunicationsFilters,
 } from '../api/public-pages-api';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDebounce } from '@/hooks/useDebounce';
-import { handleDocumentPublicDownload } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +25,7 @@ interface Communication {
   file_size: number;
   created_by: string;
   created_by_name: string;
-  update_by: string ;
+  updated_by: string;
   updated_by_name: string;
   created_at: string;
   updated_at: string;
@@ -63,8 +62,8 @@ const STATUS_COLORS: Record<string, string> = {
   PULLED_OUT: 'bg-teal-100 text-teal-700 border-teal-200',
 };
 
-const getStatusColor = (stageName: string): string =>
-  STATUS_COLORS[stageName] ?? 'bg-gray-100 text-gray-700 border-gray-200';
+const getStatusColor = (status: string): string =>
+  STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-700 border-gray-200';
 
 const DEFAULT_PAGINATION: Pagination = {
   current_page: 1,
@@ -73,53 +72,9 @@ const DEFAULT_PAGINATION: Pagination = {
   total_pages: 0,
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-interface DocBadgeProps {
-  docId: string | null;
-  label: string;
-  colorClass: string;
-  downloadKey: string;
-  downloadingId: string | null;
-  onDownload: (docId: string, key: string) => void;
-}
-
-const DocBadge = ({
-  docId,
-  label,
-  colorClass,
-  downloadKey,
-  downloadingId,
-  onDownload,
-}: DocBadgeProps) => {
-  if (!docId) return null;
-
-  const key = `${downloadKey}-${docId}`;
-  const isLoading = downloadingId === key;
-
-  return (
-    <Button
-      variant="link"
-      className="m-0 p-0 w-auto"
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onDownload(docId, key);
-      }}
-      disabled={isLoading}
-    >
-      {isLoading && <Loader2 className="mr-1 w-4 h-4 animate-spin" />}
-      <span className={`px-2 py-1 rounded-full font-semibold text-xs ${colorClass}`}>
-        {label}
-      </span>
-    </Button>
-  );
-};
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function WelcomeScreen() {
-  // List state
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState<Pagination>(DEFAULT_PAGINATION);
@@ -128,99 +83,61 @@ export default function WelcomeScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [communicationTypeFilter, setCommunicationTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [dateFromFilter, setDateFromFilter] = useState('');
-  const [dateToFilter, setDateToFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const debouncedSearch = useDebounce(searchTerm, 500);
+  const [filters, setFilters] = useState<FilterOption[]>([]);
 
-  // Filter options
-  const [communicationTypes, setCommunicationTypes] = useState<FilterOption[]>([]);
-  const [statuses, setStatuses] = useState<FilterOption[]>([]);
-  
-  // Detail / modal state
+  // Modal state
   const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null);
-  const [authors, setAuthors] = useState<Author[]>([]);
-  const [committees, setCommittees] = useState<Committee[]>([]);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // ── Data fetching ────────────────────────────────────────────────────────────
+  // Debounce search
+  const debouncedSearch = useDebounce(searchTerm, 300);
 
+  // Fetch communications
+  useEffect(() => {
+    const loadCommunications = async () => {
+      try {
+        setLoading(true);
+        const response = await fetchCommunications({
+          page: pagination.current_page,
+          limit: pagination.per_page,
+          search: debouncedSearch || undefined,
+          communication_type: communicationTypeFilter || undefined,
+          status: statusFilter || undefined,
+        });
+
+        if (response.success) {
+          setCommunications(response.data || []);
+          setPagination({
+            current_page: response.pagination?.current_page || 1,
+            per_page: response.pagination?.per_page || 10,
+            total: response.pagination?.total || 0,
+            total_pages: response.pagination?.total_pages || 0,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load communications:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCommunications();
+  }, [pagination.current_page, debouncedSearch, communicationTypeFilter, statusFilter]);
+
+  // Fetch filter options
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const [categoriesRes, stagesRes, termsRes] = await Promise.all([
-          fetchCategories(),
-          fetchStages(),
-          fetchTerms(),
-        ]);
-        if (categoriesRes.success) setCategories(categoriesRes.categories);
-        if (stagesRes.success) setStages(stagesRes.stages);
-        if (termsRes.success) setTerms(termsRes.terms);
+        const response = await fetchCommunicationsFilters();
+        if (response.success && response.communication_types) {
+          setFilters(response.communication_types);
+        }
       } catch (error) {
         console.error('Failed to load filter options:', error);
       }
     };
 
     loadFilters();
-
     window.scrollTo(0, 0);
-  }, []);
-
-  // Single effect: fetch resolutions whenever page or any filter/search changes.
-  // Page resets are handled inline in the handlers below (same render batch),
-  // so this effect only ever fires once per user action.
-  useEffect(() => {
-    const loadResolutions = async () => {
-      try {
-        setLoading(true);
-        const response = await fetchResolutions({
-          page: pagination.current_page,
-          limit: pagination.per_page,
-          category: categoryFilter || undefined,
-          stage: stageFilter || undefined,
-          term: termFilter || undefined,
-          search: debouncedSearch || undefined,
-        });
-        if (response.success) {
-          setResolutions(response.resolutions);
-          setPagination(response.pagination);
-        }
-      } catch (error) {
-        console.error('Failed to load resolutions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadResolutions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.current_page, debouncedSearch, categoryFilter, stageFilter, termFilter]);
-
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-
-  const handleSelectResolution = useCallback(async (resolution: Resolution) => {
-    setSelectedResolution(resolution);
-    setAuthors([]);
-    setCommittees([]);
-    try {
-      const [authorsRes, committeesRes] = await Promise.all([
-        fetchResolutionAuthors(resolution.id),
-        fetchResolutionCommittees(resolution.id),
-      ]);
-      if (authorsRes.success) setAuthors(authorsRes.authors);
-      if (committeesRes.success) setCommittees(committeesRes.sponsorships);
-    } catch (error) {
-      console.error('Failed to load resolution details:', error);
-    }
-  }, []);
-
-  const handleDownload = useCallback(async (docId: string, key: string) => {
-    setDownloadingId(key);
-    try {
-      await handleDocumentPublicDownload(docId);
-    } finally {
-      setDownloadingId(null);
-    }
   }, []);
 
   const handlePreviousPage = useCallback(() => {
@@ -237,213 +154,139 @@ export default function WelcomeScreen() {
     }));
   }, []);
 
-  // Reset page to 1 alongside the filter change so both land in the same render,
-  // preventing the fetch effect from firing twice.
-  const handleCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setCategoryFilter(e.target.value);
+  const handleCommunicationTypeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCommunicationTypeFilter(e.target.value);
     setPagination((prev) => ({ ...prev, current_page: 1 }));
   }, []);
 
-  const handleStageChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setStageFilter(e.target.value);
+  const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setStatusFilter(e.target.value);
     setPagination((prev) => ({ ...prev, current_page: 1 }));
   }, []);
-
-  const handleTermChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setTermFilter(e.target.value);
-    setPagination((prev) => ({ ...prev, current_page: 1 }));
-  }, []);
-
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-    setPagination((prev) => ({ ...prev, current_page: 1 }));
-  }, []);
-
-  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="flex flex-col bg-gray-50 min-h-screen">
       <Navigation showLoginButton={true} />
 
-      {/* ── Header ── */}
-      <header className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-        <div className="mx-auto px-4 sm:px-6 py-12 max-w-7xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <h1 className="mb-4 font-bold text-4xl md:text-5xl">Resolutions</h1>
-            <p className="mb-8 max-w-3xl text-emerald-100 text-lg">
-              Explore all council resolutions, approval records, and legislative actions
-            </p>
+      <main className="flex-1 mx-auto px-4 sm:px-6 py-8 w-full max-w-6xl">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="mb-2 font-bold text-gray-900 text-3xl">Communications</h1>
+          <p className="text-gray-600">Browse and search all communications</p>
+        </div>
 
-            {/* Search bar */}
-            <div className="flex sm:flex-row flex-col items-center gap-4">
-              <div className="relative flex-1 w-full">
-                <Search className="top-1/2 left-4 absolute w-5 h-5 text-gray-400 -translate-y-1/2" />
+        {/* Filters & Search */}
+        <div className="space-y-4 mb-6">
+          <div className="flex lg:flex-row flex-col gap-4">
+            {/* Search Input */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="top-3 left-3 absolute w-5 h-5 text-gray-400" />
                 <Input
                   type="text"
-                  placeholder="Search by resolution number or title..."
+                  placeholder="Search communications..."
+                  className="pl-10 border-gray-300 focus:border-[#008ea2] focus:ring-[#008ea2]"
                   value={searchTerm}
-                  onChange={handleSearchChange}
-                  className="bg-white py-6 pl-12 border-white/20 text-gray-900"
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setPagination((prev) => ({ ...prev, current_page: 1 }));
+                  }}
                 />
               </div>
-              <Button
-                onClick={() => setShowFilters((v) => !v)}
-                className="bg-white/10 hover:bg-white/20 border border-white/30 w-full sm:w-auto"
-                size="lg"
-              >
-                <Filter className="mr-2 w-5 h-5" />
-                Filters
-              </Button>
             </div>
 
-            {/* Advanced filters */}
-            <AnimatePresence>
-              {showFilters && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ type: 'tween' }}
-                  className="bg-white/10 backdrop-blur-sm mt-4 p-6 rounded-lg"
-                >
-                  <div className="gap-4 grid md:grid-cols-3">
-                    {/* Category */}
-                    <div>
-                      <label className="block mb-2 font-medium text-sm">Category</label>
-                      <select
-                        value={categoryFilter}
-                        onChange={handleCategoryChange}
-                        className="bg-white/20 px-4 py-2 border border-white/30 rounded-lg w-full text-white"
-                      >
-                        <option value="" className="text-gray-900">All Categories</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id} className="text-gray-900">
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Stage */}
-                    <div>
-                      <label className="block mb-2 font-medium text-sm">Stage</label>
-                      <select
-                        value={stageFilter}
-                        onChange={handleStageChange}
-                        className="bg-white/20 px-4 py-2 border border-white/30 rounded-lg w-full text-white"
-                      >
-                        <option value="" className="text-gray-900">All Stages</option>
-                        {stages.map((stage) => (
-                          <option key={stage.id} value={stage.id} className="text-gray-900">
-                            {stage.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Term */}
-                    <div>
-                      <label className="block mb-2 font-medium text-sm">Term</label>
-                      <select
-                        value={termFilter}
-                        onChange={handleTermChange}
-                        className="bg-white/20 px-4 py-2 border border-white/30 rounded-lg w-full text-white"
-                      >
-                        <option value="" className="text-gray-900">All Terms</option>
-                        {terms.map((term) => (
-                          <option key={term.id} value={term.id} className="text-gray-900">
-                            {term.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        </div>
-      </header>
-
-      {/* ── Content ── */}
-      <main className="mx-auto px-4 sm:px-6 py-12 max-w-7xl">
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="border-emerald-600 border-b-2 rounded-full w-12 h-12 animate-spin" />
+            {/* Filter Button */}
+            <Button variant="outline" className="border-gray-300">
+              <Filter className="mr-2 w-4 h-4" />
+              Filters
+            </Button>
           </div>
-        ) : resolutions.length === 0 ? (
-          <div className="bg-white shadow-sm p-12 rounded-xl text-center">
-            <p className="text-gray-500 text-lg">No resolutions found</p>
+
+          {/* Filter Dropdowns */}
+          <div className="flex sm:flex-row flex-col gap-3">
+            <select
+              value={communicationTypeFilter}
+              onChange={handleCommunicationTypeChange}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#008ea2] focus:ring-2"
+            >
+              <option value="">All Types</option>
+              {filters.map((filter) => (
+                <option key={filter.id} value={filter.name || ''}>
+                  {filter.label || filter.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={handleStatusChange}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#008ea2] focus:ring-2"
+            >
+              <option value="">All Status</option>
+              <option value="RECEIVED">Received</option>
+              <option value="RELEASED">Released</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="PULLED_OUT">Pulled Out</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Communications List */}
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="mr-2 w-6 h-6 text-[#008ea2] animate-spin" />
+            <span className="text-gray-600">Loading communications...</span>
+          </div>
+        ) : communications.length === 0 ? (
+          <div className="py-12 text-center">
+            <FileText className="mx-auto mb-4 w-12 h-12 text-gray-400" />
+            <h3 className="mb-2 font-semibold text-gray-900">No communications found</h3>
+            <p className="text-gray-600">Try adjusting your search or filters</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {resolutions.map((resolution, index) => (
-              <motion.article
-                key={resolution.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.03 }}
-                onClick={() => handleSelectResolution(resolution)}
-                className={`bg-white rounded-lg shadow-sm p-5 hover:shadow-md transition-all cursor-pointer border-l-4 ${
-                  resolution.is_published ? 'border-emerald-500' : 'border-gray-300'
-                } ${selectedResolution?.id === resolution.id ? 'ring-2 ring-emerald-500' : ''}`}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <span className="font-bold text-emerald-600 text-lg">
-                        {resolution.resolution_number}
+          <>
+            <div className="space-y-4">
+              {communications.map((communication, index) => (
+                <motion.article
+                  key={communication.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => setSelectedCommunication(communication)}
+                  className="flex justify-between items-start gap-4 bg-white hover:shadow-md p-4 border border-gray-200 rounded-lg transition-shadow cursor-pointer"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      <span className={`px-2 py-1 rounded-full font-semibold text-xs border ${getStatusColor(communication.status)}`}>
+                        {communication.status}
                       </span>
-                      <span className="flex items-center px-2 border rounded-full font-semibold text-xs">
-                        <Calendar className="mr-1 w-4 h-4" />
-                        Approved: {formatDate(resolution.date_approved)}
+                      <span className="bg-purple-100 px-2 py-1 border border-purple-200 rounded-full font-semibold text-purple-700 text-xs">
+                        {communication.communication_type}
                       </span>
-                      <DocBadge
-                        docId={resolution.document_id}
-                        docNumber={resolution.document_number}
-                        visibility={resolution.document_visibility}
-                        published={resolution.document_published}
-                        label="Document #"
-                        colorClass="bg-blue-100 text-blue-700"
-                        downloadKey={`doc-${resolution.id}`}
-                        downloadingId={downloadingId}
-                        onDownload={handleDownload}
-                      />
-                      <DocBadge
-                        docId={resolution.committee_report_id}
-                        docNumber={resolution.committee_report_number}
-                        visibility={resolution.committee_report_visibility}
-                        published={resolution.committee_report_published}
-                        label="Committee Report #"
-                        colorClass="bg-teal-100 text-teal-700"
-                        downloadKey={`report-${resolution.id}`}
-                        downloadingId={downloadingId}
-                        onDownload={handleDownload}
-                      />
                     </div>
                     <h3 className="mb-2 font-semibold text-gray-900 break-words whitespace-normal">
-                      {resolution.title}
+                      {communication.title}
                     </h3>
                     <div className="flex flex-wrap gap-3 text-gray-600 text-sm">
                       <span className="flex items-center">
-                        <Tag className="mr-1 w-4 h-4" />
-                        {resolution.category_name}
+                        <FileText className="mr-1 w-4 h-4" />
+                        {communication.reference_no}
                       </span>
                       <span className="flex items-center">
                         <Calendar className="mr-1 w-4 h-4" />
-                        Filed: {formatDate(resolution.date_filed)}
+                        {formatDate(communication.date_received)}
                       </span>
-                      <span className="text-gray-500">{resolution.term_label}</span>
+                      {communication.created_by_name && (
+                        <span className="text-gray-500 text-xs">
+                          by {communication.created_by_name}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <ChevronRight className="flex-shrink-0 mt-1 w-5 h-5 text-gray-400" />
-                </div>
-              </motion.article>
-            ))}
+                </motion.article>
+              ))}
+            </div>
 
             {/* Pagination */}
             {pagination.total_pages > 1 && (
@@ -467,35 +310,35 @@ export default function WelcomeScreen() {
                 </Button>
               </div>
             )}
-          </div>
+          </>
         )}
       </main>
 
-      {/* ── Detail Modal ── */}
+      {/* Detail Modal */}
       <AnimatePresence>
-        {selectedResolution && (
+        {selectedCommunication && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="z-50 fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm"
-            onClick={() => setSelectedResolution(null)}
+            onClick={() => setSelectedCommunication(null)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="flex flex-col bg-white shadow-2xl mx-3 p-0 rounded-2xl w-full max-w-3xl max-h-[90vh]"
+              className="flex flex-col bg-white shadow-2xl mx-3 p-0 rounded-2xl w-full max-w-2xl max-h-[90vh]"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal header */}
-              <div className="top-0 z-10 sticky flex justify-between items-center bg-gradient-to-r from-emerald-600 to-teal-600 p-3 sm:p-6 border-gray-200 border-b rounded-t-xl text-white">
+              <div className="top-0 z-10 sticky flex justify-between items-center bg-gradient-to-r from-[#008ea2] to-[#007a8b] p-3 sm:p-6 border-gray-200 border-b rounded-t-xl text-white">
                 <div>
-                  <h3 className="mb-2 font-bold text-xl">Resolution Details</h3>
-                  <p className="text-emerald-100 text-sm">{selectedResolution.resolution_number}</p>
+                  <h3 className="mb-2 font-bold text-xl">Communication Details</h3>
+                  <p className="text-blue-100 text-sm">{selectedCommunication.reference_no}</p>
                 </div>
                 <button
-                  onClick={() => setSelectedResolution(null)}
+                  onClick={() => setSelectedCommunication(null)}
                   className="hover:bg-white/10 p-2 rounded-full transition-colors"
                   aria-label="Close"
                 >
@@ -503,190 +346,64 @@ export default function WelcomeScreen() {
                 </button>
               </div>
 
-              {/* Modal body */}
-              <div className="overflow-y-auto scroll-smooth" style={{ scrollbarWidth: 'none' }}>
-                <div className="space-y-6 p-3 sm:p-6">
-
-                  {/* Documents */}
-                  {(
-                    (selectedResolution.document_id && selectedResolution.document_published && selectedResolution.document_visibility === 'public') ||
-                    (selectedResolution.committee_report_id && selectedResolution.committee_report_published && selectedResolution.committee_report_visibility === 'public')
-                  ) && (
-                    <div>
-                      <h4 className="mb-3 pl-2 border-emerald-600 border-l-8 font-semibold text-gray-900">
-                        Documents
-                      </h4>
-                      <div className="flex flex-wrap gap-3">
-                        {selectedResolution.document_id &&
-                          selectedResolution.document_published &&
-                          selectedResolution.document_visibility === 'public' ? (
-                            <button
-                              onClick={() =>
-                                handleDownload(
-                                  selectedResolution.document_id!,
-                                  `modal-doc-${selectedResolution.id}`
-                                )
-                              }
-                              disabled={downloadingId === `modal-doc-${selectedResolution.id}`}
-                              className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 disabled:opacity-60 px-4 py-2 border border-blue-200 rounded-lg text-blue-800 text-sm transition-colors"
-                            >
-                              {downloadingId === `modal-doc-${selectedResolution.id}` ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <FileText className="w-4 h-4" />
-                              )}
-                              <span>
-                                <span className="font-semibold">Document</span>
-                                {selectedResolution.document_number && (
-                                  <span className="ml-1 text-blue-600 text-xs">
-                                    #{selectedResolution.document_number}
-                                  </span>
-                                )}
-                              </span>
-                            </button>
-                          ) : <></>}
-
-                        {(selectedResolution.committee_report_id && Number(selectedResolution.committee_report_id) > 0) &&
-                          selectedResolution.committee_report_published &&
-                          selectedResolution.committee_report_visibility === 'public' ? (
-                            <button
-                              onClick={() =>
-                                handleDownload(
-                                  selectedResolution.committee_report_id!,
-                                  `modal-report-${selectedResolution.id}`
-                                )
-                              }
-                              disabled={downloadingId === `modal-report-${selectedResolution.id}`}
-                              className="flex items-center gap-2 bg-teal-50 hover:bg-teal-100 disabled:opacity-60 px-4 py-2 border border-teal-200 rounded-lg text-teal-800 text-sm transition-colors"
-                            >
-                              {downloadingId === `modal-report-${selectedResolution.id}` ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <FileText className="w-4 h-4" />
-                              )}
-                              <span>
-                                <span className="font-semibold">Committee Report</span>
-                                {selectedResolution.committee_report_number && (
-                                  <span className="ml-1 text-teal-600 text-xs">
-                                    #{selectedResolution.committee_report_number} MIT
-                                  </span>
-                                )}
-                              </span>
-                            </button>
-                          ) : <></>}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Timeline */}
+              {/* Modal content */}
+              <div className="flex-1 p-3 sm:p-6 overflow-y-auto">
+                <div className="space-y-4">
                   <div>
-                    <h4 className="mb-3 pl-2 border-emerald-600 border-l-8 font-semibold text-gray-900">
-                      Legislative Timeline
-                    </h4>
-                    <div className="space-y-3">
-                      {selectedResolution.date_filed && (
-                        <div className="flex items-center text-sm">
-                          <div className="bg-blue-500 mr-3 rounded-full w-2 h-2 shrink-0" />
-                          <span className="text-gray-600">Filed:</span>
-                          <span className="ml-auto font-medium">
-                            {formatDate(selectedResolution.date_filed)}
-                          </span>
-                        </div>
-                      )}
-                      {selectedResolution.date_adopted && (
-                        <div className="flex items-center text-sm">
-                          <div className="bg-green-500 mr-3 rounded-full w-2 h-2 shrink-0" />
-                          <span className="text-gray-600">Adopted:</span>
-                          <span className="ml-auto font-medium">
-                            {formatDate(selectedResolution.date_adopted)}
-                          </span>
-                        </div>
-                      )}
-                      {selectedResolution.date_approved && (
-                        <div className="flex items-center text-sm">
-                          <div className="bg-emerald-500 mr-3 rounded-full w-2 h-2 shrink-0" />
-                          <span className="text-gray-600">Approved:</span>
-                          <span className="ml-auto font-medium">
-                            {formatDate(selectedResolution.date_approved)}
-                          </span>
-                        </div>
-                      )}
+                    <h2 className="mb-2 font-bold text-gray-900 text-lg">{selectedCommunication.title}</h2>
+                  </div>
+
+                  <div className="gap-4 grid grid-cols-2 sm:grid-cols-3">
+                    <div>
+                      <p className="text-gray-500 text-sm">Reference Number</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.reference_no}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Type</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.communication_type}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Status</p>
+                      <span className={`inline-block px-2 py-1 rounded-full font-semibold text-xs border ${getStatusColor(selectedCommunication.status)}`}>
+                        {selectedCommunication.status}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Date Received</p>
+                      <p className="font-semibold text-gray-900">{formatDate(selectedCommunication.date_received)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Date Logged</p>
+                      <p className="font-semibold text-gray-900">{formatDate(selectedCommunication.date_logged)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Created By</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.created_by_name}</p>
                     </div>
                   </div>
 
-                  {/* Authors */}
-                  {authors.length > 0 && (
-                    <div>
-                      <h4 className="flex items-center mb-3 pl-2 border-emerald-600 border-l-8 font-semibold text-gray-900">
-                        <Users className="mr-2 w-5 h-5" />
-                        Author &amp; Co-authors ({authors.length})
-                      </h4>
-                      <div className="space-y-2">
-                        {authors.map((author) => (
-                          <div
-                            key={author.id}
-                            className="flex justify-between items-center bg-gray-50 p-2 rounded"
-                          >
-                            <span className="font-medium text-gray-900 text-sm">
-                              {author.member_name}
-                            </span>
-                            <span
-                              className={`text-xs px-2 py-1 rounded ${
-                                author.role === 'Author'
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : 'bg-blue-100 text-blue-700'
-                              }`}
-                            >
-                              {author.role}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Committees */}
-                  {committees.length > 0 && (
-                    <div>
-                      <h4 className="flex items-center mb-3 pl-2 border-emerald-600 border-l-8 font-semibold text-gray-900">
-                        <Building2 className="mr-2 w-5 h-5" />
-                        Sponsoring Committees ({committees.length})
-                      </h4>
-                      <div
-                        className="space-y-2 max-h-64 overflow-y-auto"
-                        style={{ scrollbarWidth: 'none' }}
-                      >
-                        {committees.map((committee) => (
-                          <div
-                            key={committee.id}
-                            className="bg-teal-50 p-3 border border-teal-200 rounded-lg"
-                          >
-                            <p className="font-medium text-teal-900 text-sm">
-                              {committee.committee_name}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Remarks */}
-                  {selectedResolution.remarks && (
-                    <div>
-                      <h4 className="mb-2 pl-2 border-emerald-600 border-l-8 font-semibold text-gray-900">
-                        Remarks
-                      </h4>
-                      <p className="text-gray-700 text-sm whitespace-pre-line">
-                        {selectedResolution.remarks}
-                      </p>
+                  {selectedCommunication.file_name && (
+                    <div className="pt-4 border-t">
+                      <p className="text-gray-500 text-sm">Attached File</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.file_name}</p>
+                      {selectedCommunication.file_size && (
+                        <p className="text-gray-500 text-sm">
+                          Size: {(selectedCommunication.file_size / 1024).toFixed(2)} KB
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Modal footer */}
-              <div className="px-6 pt-4 pb-2 border-gray-200 border-t">
-                <div className="flex flex-wrap items-center gap-2">&nbsp;</div>
+              <div className="flex justify-end items-center gap-2 bg-gray-50 p-3 sm:p-6 border-gray-200 border-t rounded-b-xl">
+                <Button
+                  onClick={() => setSelectedCommunication(null)}
+                  variant="outline"
+                >
+                  Close
+                </Button>
               </div>
             </motion.div>
           </motion.div>

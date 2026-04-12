@@ -1,4 +1,3 @@
-import { triggerDocumentDownload, triggerDocumentPublicDownload } from "@/features/documents/documents.api";
 import { clsx, type ClassValue } from "clsx";
 import { format } from "date-fns";
 import { twMerge } from "tailwind-merge";
@@ -32,24 +31,6 @@ export const formatDate = (dateString?: string) => {
 export const formatDateTime = (dateString: string) => {
   if (!dateString) return 'N/A';
   return format(new Date(dateString), 'MMM d, yyyy h:mm a');
-};
-
-export const handleDocumentDownload = async (docId: string) => {
-  try {
-    await triggerDocumentDownload(Number(docId));
-  } catch (error) {
-    console.error('Download failed:', error);
-    // Show error toast/notification
-  }
-};
-
-export const handleDocumentPublicDownload = async (docId: string) => {
-  try {
-    await triggerDocumentPublicDownload(Number(docId));
-  } catch (error) {
-    console.error('Download failed:', error);
-    // Show error toast/notification
-  }
 };
 
 export const handleTextAreaResizeOnFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {

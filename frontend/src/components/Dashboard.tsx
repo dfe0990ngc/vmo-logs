@@ -142,9 +142,6 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const { data: termsData } = useTerms({ limit: 1000 });
-  const terms = termsData?.terms ?? [];
-
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -321,13 +318,8 @@ export default function Dashboard() {
                 <SelectTrigger id="term" className="bg-white">
                   <SelectValue placeholder="Select term" />
                 </SelectTrigger>
-                <SelectContent className="max-h-60 overflow-y-auto">
+                <SelectContent>
                   <SelectItem value="0">All Terms</SelectItem>
-                  {terms && terms.map((term) => (
-                    <SelectItem key={'term-' + term.id.toString()} value={term.id.toString()}>
-                      {term.label}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>

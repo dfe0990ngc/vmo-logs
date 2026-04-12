@@ -1,4 +1,4 @@
-import { useEffect, useState, memo, useRef } from "react";
+import { useEffect, useState, memo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,12 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CreateUserDTO, User } from "../users.types";
-import { useAjaxMembers } from "@/features/members/members.hooks";
 import { Loader2 } from "lucide-react";
-import { Member } from "@/features/members/members.types";
-import MemberCombobox from "@/components/ui/member-combobox";
-import { useDebounce } from "@/hooks/useDebounce";
-import { useMemberList } from "@/hooks/useMemberList";
 
 const DEFAULT_FORM_DATA: Partial<CreateUserDTO> = {
   user_id: "",
@@ -92,18 +87,6 @@ const FormDialog = memo(
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
-    
-    // Start: Members Combobox
-    const [memberSearch, setMemberSearch] = useState("");
-    const [memberOpen, setMemberOpen] = useState(false);
-    const pinnedMemberRef = useRef<Member | undefined>(undefined);
-    const debouncedMemberSearch = useDebounce(memberSearch,750);
-    const { members: membersData, isFetching: membersFetching } = useMemberList(
-      debouncedMemberSearch,
-      (mode !== "create" ? user?.member_id ?? null : null),
-      pinnedMemberRef
-    );
-    // END: Members Combobox
 
     const handleChange = (
       field: keyof CreateUserDTO,
@@ -117,40 +100,6 @@ const FormDialog = memo(
         setErrors({});
       }
     }, [open, mode]);
-
-    /* ===============================
-       MEMBER → USER AUTO SYNC
-    ================================ */
-    const handleMemberChange = (memberId: number, member: Member | null) => {
-      
-      if (!memberId || !member) {
-        setFormData((prev) => ({
-          ...prev,
-          member_id: 0,
-        }));
-        return;
-      }
-
-      setFormData((prev) => ({
-        ...prev,
-        member_id: member.id,
-        prefix: member.prefix || "",
-        first_name: member.first_name || "",
-        middle_name: member.middle_name || "",
-        last_name: member.last_name || "",
-        suffix: member.suffix || "",
-        email: member.email || "",
-        phone: member.phone || "",
-      }));
-
-      setErrors((prev) => ({
-        ...prev,
-        user_id: "",
-        first_name: "",
-        last_name: "",
-        password: "",
-      }));
-    };
 
     const validate = (): boolean => {
       const newErrors: Record<string, string> = {};
@@ -190,32 +139,11 @@ const FormDialog = memo(
             <DialogTitle>
               {mode === "create" ? "Create User" : (mode === 'edit' ? "Edit User" : "View User")}
             </DialogTitle>
-            <DialogDescription>{mode !== 'view' ? 'When user is a member, select to auto-fill details.' : ''}</DialogDescription>
+            <DialogDescription>{mode === 'create' ? 'Add a new system user account' : ''}</DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4 pt-4 pb-3 overflow-y-auto scroll-smooth" style={{scrollbarWidth: 'none'}}>
             <div className="gap-4 grid grid-cols-1 sm:grid-cols-2">
-              {/* MEMBER FIRST */}
-              <div className="space-y-2 sm:col-span-2">
-                <MemberCombobox
-                    label="Linked Member"
-                    value={formData.member_id ?? 0}
-                    members={membersData}
-                    isFetching={membersFetching}
-                    search={memberSearch}
-                    open={memberOpen}
-                    disabled={mode === "view" || mode === "edit"}
-                    error={errors.member_id}
-                    onSearchChange={setMemberSearch}
-                    onOpenChange={setMemberOpen}
-                    onSelect={(id, member) => {
-                      // Pin the doc synchronously before any state update settles
-                      pinnedMemberRef.current = member ?? undefined;
-                      handleMemberChange(id, member);
-                    }}
-                  />
-              </div>
-
               {/* USERNAME */}
               <div className="space-y-2">
                 <Label>Username <span className="text-red-500">*</span></Label>

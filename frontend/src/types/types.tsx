@@ -1,7 +1,3 @@
-import { Member } from "@/features/members/members.types";
-import { Ordinance } from "@/features/ordinances/ordinances.types";
-import { Resolution } from "@/features/resolutions/resolutions.types";
-
 // Union Types and Enums
 export type UserRole = 'Admin' | 'Member' | 'Staff';
 export type UserStatus = 'active' | 'inactive' | 'pending';
@@ -84,47 +80,4 @@ export interface DocumentComboboxProps {
   onSelect: (id: number, doc: AppDocument | null) => void;
   onCopyTitle?: (doc: AppDocument) => void;
   onDownload?: (id: number) => void;
-}
-
-export interface MemberComboboxProps {
-  label: string;
-  value: number;
-  members: Member[];
-  isFetching?: boolean;
-  search: string;
-  open: boolean;
-  disabled?: boolean;
-  error?: string;
-  copiedId?: number | null;
-  onSearchChange: (v: string) => void;
-  onOpenChange: (v: boolean) => void;
-  onSelect: (id: number, member: Member | null) => void;
-}
-
-export interface ResolutionComboboxProps {
-  label: string;
-  value: number;
-  resolutions: Resolution[];
-  isFetching?: boolean;
-  search: string;
-  open: boolean;
-  disabled?: boolean;
-  error?: string;
-  onSearchChange: (v: string) => void;
-  onOpenChange: (v: boolean) => void;
-  onSelect: (id: number, resolution: Resolution | null) => void;
-}
-
-export interface OrdinanceComboboxProps {
-  label: string;
-  value: number;
-  ordinances: Ordinance[];
-  isFetching?: boolean;
-  search: string;
-  open: boolean;
-  disabled?: boolean;
-  error?: string;
-  onSearchChange: (v: string) => void;
-  onOpenChange: (v: boolean) => void;
-  onSelect: (id: number, ordinance: Ordinance | null) => void;
 }
