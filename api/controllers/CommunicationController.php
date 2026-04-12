@@ -1,485 +1,555 @@
 <?php
+
 declare(strict_types=1);
 
-namespace App\controllers;
+namespace App\Controllers;
 
-use App\controllers\Controller;
-use App\core\AuditLogger;
-use App\core\Database;
-use App\core\R2StorageHelper;
-use App\core\Util;
-use App\core\Validator;
+use App\Core\Database;
+use PDO;
 use Exception;
 
-class CommunicationController extends Controller {
-
-    // Maximum file size (50 MB)
-    private const MAX_FILE_SIZE = 52428800;
-
-    // Valid ENUM values mirrored from the DB schema
-    private const COMM_TYPES = [
-        'MTOP', 'TRAVEL_ORDER', 'SB_RESOLUTION', 'SB_ORDINANCE',
-        'APPLICATION_LEAVE', 'MEMO', 'NOTICE_HEARING', 'INVITATION',
-        'ENDORSEMENT', 'DSSC', 'MADAC', 'DOE', 'SOLICITATION', 'TENT_REQUEST', 'OTHER',
-    ];
-
-    private const STATUSES = ['RECEIVED', 'FOR_SIGNING', 'SIGNED', 'RELEASED','PULLED_OUT'];
-
-    // ─────────────────────────────────────────────
-    // LIST (authenticated)
-    // ─────────────────────────────────────────────
-
-    public function index(): void {
-        $this->checkPermission(['Admin', 'Staff']);
-        $this->response(true, 'Records retrieved successfully', $this->buildList());
-    }
-
-    // LIST (public JSON — no auth)
-    public function indexJSON(): void {
-        $this->response(true, 'Records retrieved successfully', $this->buildList());
-    }
-
-    // ─────────────────────────────────────────────
-    // SHOW
-    // ─────────────────────────────────────────────
-
-    public function show(?string $id = null): void {
-        $this->checkPermission(['Admin', 'Staff']);
-
-        if (!$id) $this->response(false, 'Communication ID is required', [], 400);
-
-        $record = $this->getCommunication($id);
-        if (empty($record)) $this->response(false, 'Communication not found', [], 404);
-
-        $this->response(true, 'Record retrieved successfully', ['communication' => $record]);
-    }
-
-    // ─────────────────────────────────────────────
-    // CREATE
-    // ─────────────────────────────────────────────
-
-    public function create(): void {
-        $this->checkPermission(['Admin', 'Staff']);
-
-        // Support both application/json and multipart (FormData)
-        $data = !empty($_POST) ? $_POST : $this->getJsonInput();
-
-        $validator = new Validator();
-        if (!$validator->validate($data, [
-            'title'              => 'required|string|max:255',
-            'communication_type' => 'required|in:' . implode(',', self::COMM_TYPES),
-            'status'             => 'nullable|in:' . implode(',', self::STATUSES),
-            'reference_no'       => 'nullable|string|max:100',
-            'date_received'      => 'nullable|date',
-        ])) {
-            $this->response(false, $validator->getFirstError(), ['errors' => $validator->getErrors()], 422);
-        }
-
-        $uploadResult = $this->handleFileUpload();
-        if (!$uploadResult['success']) {
-            $uploadResult = [
-                'success'   => false,
-                'file_path' => null,       // R2 key (replaces local relative path)
-                'file_size' => null,
-            ];
-        }
-
-        $userID = $this->getAuthenticatedUser();
-        $user   = Database::fetch('SELECT * FROM users WHERE user_id = ?', [$userID]);
-
-        try {
-            $id = Database::insert('communications', [
-                'title'              => Validator::sanitize($data['title']),
-                'communication_type' => $data['communication_type'],
-                'status'             => $data['status']       ?? 'RECEIVED',
-                'reference_no'       => $data['reference_no'] ?? null,
-                'date_received'      => Util::normalizeValue($data['date_received'] ?? null),
-                'date_logged'        => date('Y-m-d H:i:s'),
-                'file_path'       => $uploadResult['file_path'],   // R2 key stored here
-                'file_size'       => $uploadResult['file_size'],
-                'created_by'         => $user['id'] ?? null,
-                'updated_by'         => $user['id'] ?? null,
-                'created_at'         => date('Y-m-d H:i:s'),
-                'updated_at'         => date('Y-m-d H:i:s'),
-            ]);
-
-            $record = $this->getCommunication($id);
-
-            AuditLogger::logCreate(
-                'communications',
-                $id,
-                $record['title'],
-                $record,
-                "Created new communication: {$record['communication_type']} - {$record['title']}"
-            );
-
-            $this->response(true, 'Communication created successfully', ['communication' => $record], 201);
-
-        } catch (Exception $e) {
-            error_log('Communication creation error: ' . $e->getMessage());
-            $this->response(false, 'Failed to create communication record', [], 500);
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // UPDATE
-    // ─────────────────────────────────────────────
-
-    public function update(?string $id = null): void {
-        $this->checkPermission(['Admin', 'Staff']);
-
-        if (!$id) $this->response(false, 'Communication ID is required', [], 400);
-
-        $existing = $this->getCommunication($id);
-        if (empty($existing)) $this->response(false, 'Communication not found', [], 404);
-
-        // Support both application/json and multipart (FormData)
-        $data = !empty($_POST) ? $_POST : $this->getJsonInput();
-
-        $validator = new Validator();
-        if (!$validator->validate($data, [
-            'title'              => 'nullable|string|max:255',
-            'communication_type' => 'nullable|in:' . implode(',', self::COMM_TYPES),
-            'status'             => 'nullable|in:' . implode(',', self::STATUSES),
-            'reference_no'       => 'nullable|string|max:100',
-            'date_received'      => 'nullable|date',
-        ])) {
-            $this->response(false, $validator->getFirstError(), ['errors' => $validator->getErrors()], 422);
-        }
-
-        $allowedFields = ['title', 'communication_type', 'status', 'reference_no', 'date_received'];
-
-        $uploadResult = $this->handleFileUpload();
-
-        if (!empty($uploadResult['success'])) {
-            $allowedFields = array_merge($allowedFields, ['file_path', 'file_size']);
-
-            $data['file_path'] = $uploadResult['file_path'] ?? null;
-            $data['file_size'] = $uploadResult['file_size'] ?? null;
-        }
-
-        $updateData    = [];
-        $changes       = [];
-
-        foreach ($allowedFields as $field) {
-            if (!array_key_exists($field, $data)) continue;
-
-            $incoming = Util::normalizeValue($data[$field]);
-            if ($incoming === '') $incoming = null;
-
-            if ($incoming !== $existing[$field]) {
-                $updateData[$field] = ($field === 'document_id' && $incoming !== null)
-                    ? (int)$incoming
-                    : $incoming;
-                $changes[$field] = ['from' => $existing[$field], 'to' => $incoming];
-            }
-        }
-
-        if (empty($updateData)) {
-            $this->response(false, 'No fields to update', [], 400);
-        }
-
-        $userID = $this->getAuthenticatedUser();
-        $user   = Database::fetch('SELECT * FROM users WHERE user_id = ?', [$userID]);
-
-        $updateData['updated_by'] = $user['id'] ?? null;
-        $updateData['updated_at'] = date('Y-m-d H:i:s');
-
-        if (isset($updateData['title'])) {
-            $updateData['title'] = Validator::sanitize($updateData['title']);
-        }
-
-        try {
-            $rowCount = Database::update('communications', $updateData, 'id = :id', ['id' => $id]);
-            $record   = $this->getCommunication($id);
-
-            if ($rowCount > 0 || !empty($changes)) {
-                $oldValues = array_combine(array_keys($changes), array_column($changes, 'from'));
-                $newValues = array_combine(array_keys($changes), array_column($changes, 'to'));
-
-                AuditLogger::logUpdate(
-                    'communications',
-                    (int)$id,
-                    $record['title'],
-                    $oldValues,
-                    $newValues,
-                    "Updated communication: {$record['communication_type']} - {$record['title']}"
-                );
-
-                // Remove old file
-                if (!empty($existing['file_path']) && $uploadResult['success']) {
-                    R2StorageHelper::delete($existing['file_path']);
-                }
-
-                $this->response(true, 'Communication updated successfully', ['communication' => $record]);
-            } else {
-                $this->response(false, 'No changes made to communication record', [], 304);
-            }
-
-        } catch (Exception $e) {
-            error_log('Communication update error: ' . $e->getMessage());
-            $this->response(false, 'Failed to update communication', [], 500);
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // DELETE
-    // ─────────────────────────────────────────────
-
-    public function delete(?string $id = null): void {
-        $this->checkPermission(['Admin']);
-
-        if (!$id) $this->response(false, 'Communication ID is required', [], 400);
-
-        $record = $this->getCommunication($id);
-        if (empty($record)) $this->response(false, 'Communication not found', [], 404);
-
-        // Delete file from R2
-        if (!empty($record['file_path'])) {
-            R2StorageHelper::delete($record['file_path']);
-        }
-
-        try {
-            $stmt     = Database::query("DELETE FROM communications WHERE id = ?", [$id]);
-            $rowCount = $stmt->rowCount();
-
-            if ($rowCount > 0) {
-                AuditLogger::logDelete(
-                    'communications',
-                    (int)$id,
-                    $record['title'],
-                    $record,
-                    "Deleted communication: {$record['communication_type']} - {$record['title']}"
-                );
-
-                $this->response(true, 'Communication deleted successfully');
-            } else {
-                $this->response(false, 'Communication not found', [], 404);
-            }
-        } catch (Exception $e) {
-            error_log('Communication deletion error: ' . $e->getMessage());
-            if (str_contains($e->getMessage(), '1451')) {
-                $this->response(false, 'Cannot delete this communication. It is linked to another record.', [], 409);
-            } else {
-                $this->response(false, 'Failed to delete communication', [], 500);
-            }
-        }
-    }
-
-    // ─────────────────────────────────────────────
-    // FILTER OPTIONS (for dropdowns in the UI)
-    // ─────────────────────────────────────────────
-
-    public function filterOptions(): void {
-        $this->checkPermission(['Admin', 'Staff']);
-
-        $this->response(true, 'Filter options retrieved', [
-            'communication_types' => self::COMM_TYPES,
-            'statuses'            => self::STATUSES,
-        ]);
-    }
-
-    // ─────────────────────────────────────────────
-    // PRIVATE HELPERS
-    // ─────────────────────────────────────────────
-
-    // ─────────────────────────────────────────────
-    // PUBLIC DOWNLOAD
-    // ─────────────────────────────────────────────
-    public function publicDownload(?string $id = null): void {
-        if (!$id) {
-            $this->response(false, 'Communicatioin ID is required', [], 400);
-            exit;
-        }
-
-        $document = $this->getCommunication($id);
-        if (empty($document)) {
-            $this->response(false, 'Document not found', [], 404);
-            exit;
-        }
-
-        if (empty($document['file_path'])) {
-            $this->response(false, 'No file attached', [], 404);
-            exit;
-        }
-
-        $fileBase = pathinfo($document['file_path'], PATHINFO_FILENAME);
-        $fileName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $fileBase) . '.pdf';
-
-        AuditLogger::logAccess(
-            'Document Downloads',
-            $id ? (int)$id : 0,
-            ucfirst($document['communication_type']) . '#: ' . $document['file_name']
-        );
-
-        R2StorageHelper::streamToBrowser(
-            $document['file_path'],
-            $fileName,
-            'application/pdf',
-            true
-        );
+class CommunicationController
+{
+    private $db;
+    private $table = 'communications';
+
+    public function __construct()
+    {
+        $this->db = Database::getInstance();
     }
 
     /**
-     * Validate the uploaded file and push it to R2.
-     * Returns the same shape as the old local handleFileUpload()
-     * so the rest of the controller stays unchanged.
+     * Get all communications with pagination, filtering, and search
+     * GET /api/communications
      */
-    private function handleFileUpload(): array {
-        if (!isset($_FILES['file'])) {
-            return ['success' => false, 'message' => 'No file uploaded'];
+    public function index()
+    {
+        try {
+            $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $limit = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 10;
+            $offset = ($page - 1) * $limit;
+
+            $whereClause = [];
+            $params = [];
+
+            // Search by title or reference
+            if (!empty($_GET['search'])) {
+                $search = '%' . $_GET['search'] . '%';
+                $whereClause[] = "(title LIKE ? OR reference_no LIKE ?)";
+                $params[] = $search;
+                $params[] = $search;
+            }
+
+            // Filter by communication type
+            if (!empty($_GET['type'])) {
+                $whereClause[] = "communication_type = ?";
+                $params[] = $_GET['type'];
+            }
+
+            // Filter by status
+            if (!empty($_GET['status'])) {
+                $whereClause[] = "status = ?";
+                $params[] = $_GET['status'];
+            }
+
+            // Filter by date range
+            if (!empty($_GET['date_from'])) {
+                $whereClause[] = "DATE(date_received) >= ?";
+                $params[] = $_GET['date_from'];
+            }
+
+            if (!empty($_GET['date_to'])) {
+                $whereClause[] = "DATE(date_received) <= ?";
+                $params[] = $_GET['date_to'];
+            }
+
+            $where = !empty($whereClause) ? "WHERE " . implode(" AND ", $whereClause) : "";
+
+            // Get total count
+            $countQuery = "SELECT COUNT(*) as total FROM {$this->table} $where";
+            $countStmt = $this->db->prepare($countQuery);
+            $countStmt->execute($params);
+            $countResult = $countStmt->fetch(PDO::FETCH_ASSOC);
+            $total = $countResult['total'] ?? 0;
+
+            // Get paginated data
+            $query = "SELECT * FROM {$this->table} $where ORDER BY date_received DESC, id DESC LIMIT ? OFFSET ?";
+            $params[] = $limit;
+            $params[] = $offset;
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+            $communications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            http_response_code(200);
+            return json_encode([
+                'success' => true,
+                'data' => $communications,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => $total,
+                    'pages' => ceil($total / $limit)
+                ]
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            return json_encode([
+                'success' => false,
+                'message' => 'Failed to retrieve communications',
+                'error' => $e->getMessage()
+            ]);
         }
-
-        $result = R2StorageHelper::uploadFromRequest(
-            $_FILES['file'],
-            'documents',                  // R2 folder prefix
-            ['application/pdf'],          // allowed MIME types
-            self::MAX_FILE_SIZE
-        );
-
-        if (!$result['success']) {
-            return $result;
-        }
-
-        return [
-            'success'   => true,
-            'file_path' => $result['key'],       // R2 key (replaces local relative path)
-            'file_size' => $result['file_size'],
-        ];
-    }
-    
-    private function buildList(): array {
-        $page     = isset($_GET['page'])   ? max(1, (int)$_GET['page'])  : 1;
-        $limit    = isset($_GET['limit'])  ? max(1, (int)$_GET['limit']) : 10;
-        $search   = $_GET['search'] ?? null;
-        $type     = $_GET['communication_type'] ?? null;
-        $status   = $_GET['status'] ?? null;
-        $dateFrom = $_GET['date_from'] ?? null;
-        $dateTo   = $_GET['date_to'] ?? null;
-        $offset   = ($page - 1) * $limit;
-
-        $baseQuery = "FROM communications c
-            LEFT JOIN users cu ON cu.id = c.created_by
-            LEFT JOIN users uu ON uu.id = c.updated_by
-            LEFT JOIN documents d ON d.id = c.document_id
-            WHERE 1=1";
-
-        $params = [];
-
-        // ── FULLTEXT SEARCH ───────────────────────────────────────────────
-        $scoreSelect = "0 AS score"; // default if no search
-
-        if (!empty($search)) {
-            $baseQuery .= " AND MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE)";
-            $params[] = $search;
-
-            $scoreSelect = "MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE) AS score";
-            $params[] = $search; // second binding for SELECT
-        }
-
-        // ── Filters ───────────────────────────────────────────────────────
-        if ($type && in_array($type, self::COMM_TYPES, true)) {
-            $baseQuery .= " AND c.communication_type = ?";
-            $params[]   = $type;
-        }
-
-        if ($status && in_array($status, self::STATUSES, true)) {
-            $baseQuery .= " AND c.status = ?";
-            $params[]   = $status;
-        }
-
-        // ── Date range ────────────────────────────────────────────────────
-        if ($dateFrom && $dateTo) {
-            $baseQuery .= " AND c.date_received BETWEEN ? AND ?";
-            $params[]   = $dateFrom;
-            $params[]   = $dateTo;
-        } elseif ($dateFrom) {
-            $baseQuery .= " AND c.date_received >= ?";
-            $params[]   = $dateFrom;
-        } elseif ($dateTo) {
-            $baseQuery .= " AND c.date_received <= ?";
-            $params[]   = $dateTo;
-        }
-
-        // ── Total count ───────────────────────────────────────────────────
-        $total = (int) Database::fetch(
-            "SELECT COUNT(*) AS cnt " . $baseQuery,
-            array_slice($params, 0, !empty($search) ? count($params) - 1 : count($params)) // remove duplicate search param
-        )['cnt'];
-
-        // ── Main query ────────────────────────────────────────────────────
-        $query = "SELECT
-                c.id,
-                c.title,
-                c.communication_type,
-                c.status,
-                c.reference_no,
-                c.date_received,
-                c.date_logged,
-                c.document_id,
-                d.file_name  AS document_file_name,
-                d.file_path  AS document_file_path,
-                c.created_by,
-                cu.name      AS created_by_name,
-                c.updated_by,
-                uu.name      AS updated_by_name,
-                c.created_at,
-                c.updated_at,
-                {$scoreSelect}
-            " . $baseQuery;
-
-        // ── Sorting ───────────────────────────────────────────────────────
-        if (!empty($search)) {
-            $query .= " ORDER BY score DESC, c.date_received DESC, c.id DESC";
-        } else {
-            $query .= " ORDER BY c.date_received DESC, c.id DESC";
-        }
-
-        $query .= " LIMIT ? OFFSET ?";
-
-        $params[] = $limit;
-        $params[] = $offset;
-
-        $records = Database::fetchAll($query, $params);
-
-        return [
-            'communications' => $records,
-            'pagination' => [
-                'current_page' => $page,
-                'per_page'     => $limit,
-                'total'        => $total,
-                'total_pages'  => (int) ceil($total / $limit),
-            ],
-        ];
     }
 
-    private function getCommunication(int|string $id): array {
-        $record = Database::fetch("
-            SELECT
-                c.id,
-                c.title,
-                c.communication_type,
-                c.status,
-                c.reference_no,
-                c.date_received,
-                c.date_logged,
-                c.document_id,
-                d.file_name  AS document_file_name,
-                d.file_path  AS document_file_path,
-                c.created_by,
-                cu.name      AS created_by_name,
-                c.updated_by,
-                uu.name      AS updated_by_name,
-                c.created_at,
-                c.updated_at
-            FROM communications c
-            LEFT JOIN users cu ON cu.id = c.created_by
-            LEFT JOIN users uu ON uu.id = c.updated_by
-            LEFT JOIN documents d  ON d.id  = c.document_id
-            WHERE c.id = ?
-            LIMIT 1
-        ", [$id]);
+    /**
+     * Get communications for public AJAX (no auth required)
+     * GET /api/ajax-communications
+     */
+    public function indexJSON()
+    {
+        try {
+            $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+            $limit = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 10;
+            $offset = ($page - 1) * $limit;
 
-        return $record ?? [];
+            $whereClause = [];
+            $params = [];
+
+            if (!empty($_GET['search'])) {
+                $search = '%' . $_GET['search'] . '%';
+                $whereClause[] = "(title LIKE ? OR reference_no LIKE ?)";
+                $params[] = $search;
+                $params[] = $search;
+            }
+
+            if (!empty($_GET['type'])) {
+                $whereClause[] = "communication_type = ?";
+                $params[] = $_GET['type'];
+            }
+
+            if (!empty($_GET['status'])) {
+                $whereClause[] = "status = ?";
+                $params[] = $_GET['status'];
+            }
+
+            $where = !empty($whereClause) ? "WHERE " . implode(" AND ", $whereClause) : "";
+
+            $countQuery = "SELECT COUNT(*) as total FROM {$this->table} $where";
+            $countStmt = $this->db->prepare($countQuery);
+            $countStmt->execute($params);
+            $countResult = $countStmt->fetch(PDO::FETCH_ASSOC);
+            $total = $countResult['total'] ?? 0;
+
+            $query = "SELECT id, title, communication_type, status, reference_no, date_received, file_name FROM {$this->table} $where ORDER BY date_received DESC LIMIT ? OFFSET ?";
+            $params[] = $limit;
+            $params[] = $offset;
+
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+            $communications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            http_response_code(200);
+            echo json_encode([
+                'success' => true,
+                'data' => $communications,
+                'pagination' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => $total,
+                    'pages' => ceil($total / $limit)
+                ]
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to retrieve communications'
+            ]);
+        }
+    }
+
+    /**
+     * Get single communication by ID
+     * GET /api/communications/{id}
+     */
+    public function show($id)
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT * FROM {$this->table} WHERE id = ?");
+            $stmt->execute([$id]);
+            $communication = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$communication) {
+                http_response_code(404);
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Communication not found'
+                ]);
+            }
+
+            http_response_code(200);
+            return json_encode([
+                'success' => true,
+                'data' => $communication
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            return json_encode([
+                'success' => false,
+                'message' => 'Failed to retrieve communication'
+            ]);
+        }
+    }
+
+    /**
+     * Create new communication
+     * POST /api/communications
+     */
+    public function create()
+    {
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            $userId = $_SERVER['HTTP_X_USER_ID'] ?? null;
+            $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
+
+            if (!$data || !isset($data['title'])) {
+                http_response_code(400);
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Title is required'
+                ]);
+            }
+
+            $fileSize = 0;
+            $fileName = null;
+            $filePath = null;
+
+            // Handle file upload
+            if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                $fileName = $_FILES['file']['name'];
+                $fileSize = $_FILES['file']['size'];
+                $tmpPath = $_FILES['file']['tmp_name'];
+
+                // Create storage directory if needed
+                $storageDir = __DIR__ . '/../../storage/uploads/communications';
+                if (!is_dir($storageDir)) {
+                    mkdir($storageDir, 0755, true);
+                }
+
+                $uniqueName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $fileName);
+                $filePath = '/vmo-logs/storage/uploads/communications/' . $uniqueName;
+                $uploadPath = __DIR__ . '/../../' . $filePath;
+
+                if (!move_uploaded_file($tmpPath, $uploadPath)) {
+                    throw new Exception('Failed to upload file');
+                }
+            }
+
+            $stmt = $this->db->prepare("
+                INSERT INTO {$this->table} (
+                    title, communication_type, status, reference_no, 
+                    date_received, date_logged, file_name, file_path, 
+                    file_size, created_by, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ");
+
+            $status = $data['status'] ?? 'RECEIVED';
+            
+            $stmt->execute([
+                $data['title'],
+                $data['communication_type'] ?? 'OTHER',
+                $status,
+                $data['reference_no'] ?? null,
+                $data['date_received'] ?? date('Y-m-d'),
+                date('Y-m-d H:i:s'),
+                $fileName,
+                $filePath,
+                $fileSize,
+                $userId
+            ]);
+
+            $commId = $this->db->lastInsertId();
+
+            // Log audit trail
+            $this->logAuditTrail($userId, $userName, 'CREATE', 'COMMUNICATION', $commId, 
+                $data['title'], null, $data);
+
+            http_response_code(201);
+            return json_encode([
+                'success' => true,
+                'message' => 'Communication created successfully',
+                'data' => ['id' => $commId]
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            return json_encode([
+                'success' => false,
+                'message' => 'Failed to create communication',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Update communication
+     * POST /api/communications/{id}
+     */
+    public function update($id)
+    {
+        try {
+            $data = json_decode(file_get_contents('php://input'), true);
+            $userId = $_SERVER['HTTP_X_USER_ID'] ?? null;
+            $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
+
+            // Get old values for audit
+            $stmt = $this->db->prepare("SELECT * FROM {$this->table} WHERE id = ?");
+            $stmt->execute([$id]);
+            $oldData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$oldData) {
+                http_response_code(404);
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Communication not found'
+                ]);
+            }
+
+            $updates = [];
+            $params = [];
+            $fileName = $oldData['file_name'];
+            $filePath = $oldData['file_path'];
+            $fileSize = $oldData['file_size'];
+
+            // Handle file upload
+            if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+                // Delete old file
+                if ($filePath && file_exists(__DIR__ . '/../../' . $filePath)) {
+                    unlink(__DIR__ . '/../../' . $filePath);
+                }
+
+                $fileName = $_FILES['file']['name'];
+                $fileSize = $_FILES['file']['size'];
+                $tmpPath = $_FILES['file']['tmp_name'];
+
+                $storageDir = __DIR__ . '/../../storage/uploads/communications';
+                if (!is_dir($storageDir)) {
+                    mkdir($storageDir, 0755, true);
+                }
+
+                $uniqueName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $fileName);
+                $filePath = '/vmo-logs/storage/uploads/communications/' . $uniqueName;
+                $uploadPath = __DIR__ . '/../../' . $filePath;
+
+                if (!move_uploaded_file($tmpPath, $uploadPath)) {
+                    throw new Exception('Failed to upload file');
+                }
+
+                $updates[] = "file_name = ?";
+                $updates[] = "file_path = ?";
+                $updates[] = "file_size = ?";
+                $params[] = $fileName;
+                $params[] = $filePath;
+                $params[] = $fileSize;
+            }
+
+            // Update text fields
+            $fieldsToUpdate = ['title', 'communication_type', 'status', 'reference_no', 'date_received'];
+            foreach ($fieldsToUpdate as $field) {
+                if (isset($data[$field])) {
+                    $updates[] = "$field = ?";
+                    $params[] = $data[$field];
+                }
+            }
+
+            if (empty($updates)) {
+                http_response_code(400);
+                return json_encode([
+                    'success' => false,
+                    'message' => 'No fields to update'
+                ]);
+            }
+
+            $updates[] = "updated_at = NOW()";
+            $params[] = $id;
+
+            $updateQuery = "UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE id = ?";
+            $stmt = $this->db->prepare($updateQuery);
+            $stmt->execute($params);
+
+            // Log audit trail
+            $newData = array_merge($oldData, $data ?? []);
+            $this->logAuditTrail($userId, $userName, 'UPDATE', 'COMMUNICATION', $id, 
+                $data['title'] ?? $oldData['title'], $oldData, $newData);
+
+            http_response_code(200);
+            return json_encode([
+                'success' => true,
+                'message' => 'Communication updated successfully'
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            return json_encode([
+                'success' => false,
+                'message' => 'Failed to update communication',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Delete communication
+     * DELETE /api/communications/{id}
+     */
+    public function delete($id)
+    {
+        try {
+            $userId = $_SERVER['HTTP_X_USER_ID'] ?? null;
+            $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
+
+            // Get communication before deletion
+            $stmt = $this->db->prepare("SELECT * FROM {$this->table} WHERE id = ?");
+            $stmt->execute([$id]);
+            $communication = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$communication) {
+                http_response_code(404);
+                return json_encode([
+                    'success' => false,
+                    'message' => 'Communication not found'
+                ]);
+            }
+
+            // Delete file if exists
+            if ($communication['file_path'] && file_exists(__DIR__ . '/../../' . $communication['file_path'])) {
+                unlink(__DIR__ . '/../../' . $communication['file_path']);
+            }
+
+            // Delete from database
+            $stmt = $this->db->prepare("DELETE FROM {$this->table} WHERE id = ?");
+            $stmt->execute([$id]);
+
+            // Log audit trail
+            $this->logAuditTrail($userId, $userName, 'DELETE', 'COMMUNICATION', $id, 
+                $communication['title'], $communication, null);
+
+            http_response_code(200);
+            return json_encode([
+                'success' => true,
+                'message' => 'Communication deleted successfully'
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            return json_encode([
+                'success' => false,
+                'message' => 'Failed to delete communication',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Public download endpoint for files (no auth required)
+     * GET /api/communications/{id}/public-download
+     */
+    public function publicDownload($id)
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT file_path, file_name FROM {$this->table} WHERE id = ?");
+            $stmt->execute([$id]);
+            $communication = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$communication || !$communication['file_path']) {
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'File not found'
+                ]);
+                return;
+            }
+
+            $filePath = __DIR__ . '/../../' . $communication['file_path'];
+
+            if (!file_exists($filePath)) {
+                http_response_code(404);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'File not found on server'
+                ]);
+                return;
+            }
+
+            header('Content-Type: application/octet-stream');
+            header('Content-Disposition: attachment; filename="' . basename($communication['file_name']) . '"');
+            header('Content-Length: ' . filesize($filePath));
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            readfile($filePath);
+            exit;
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Failed to download file'
+            ]);
+        }
+    }
+
+    /**
+     * Get filter options for dropdowns
+     * GET /api/communications/filter-options
+     */
+    public function filterOptions()
+    {
+        try {
+            $types = $this->db->query("SELECT DISTINCT communication_type FROM {$this->table} ORDER BY communication_type")->fetchAll(PDO::FETCH_COLUMN);
+            $statuses = $this->db->query("SELECT DISTINCT status FROM {$this->table} ORDER BY status")->fetchAll(PDO::FETCH_COLUMN);
+
+            http_response_code(200);
+            return json_encode([
+                'success' => true,
+                'data' => [
+                    'types' => !empty($types) ? $types : ['MTOP', 'TRAVEL_ORDER', 'SB_RESOLUTION', 'SB_ORDINANCE', 'APPLICATION_LEAVE', 'MEMO', 'NOTICE_HEARING', 'INVITATION', 'ENDORSEMENT', 'DSSC', 'MADAC', 'DOE', 'SOLICITATION', 'TENT_REQUEST', 'OTHER'],
+                    'statuses' => !empty($statuses) ? $statuses : ['RECEIVED', 'RELEASED', 'COMPLETED', 'PULLED_OUT']
+                ]
+            ]);
+        } catch (Exception $e) {
+            http_response_code(500);
+            return json_encode([
+                'success' => false,
+                'message' => 'Failed to retrieve filter options'
+            ]);
+        }
+    }
+
+    /**
+     * Log audit trail
+     */
+    private function logAuditTrail($userId, $userName, $action, $entityType, $entityId, $entityName, $oldValues, $newValues)
+    {
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO audit_trails (
+                    user_id, user_name, user_type, action, entity_type, 
+                    entity_id, entity_name, old_values, new_values, 
+                    ip_address, user_agent, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+
+            $stmt->execute([
+                $userId,
+                $userName,
+                'Staff',
+                $action,
+                $entityType,
+                $entityId,
+                $entityName,
+                json_encode($oldValues),
+                json_encode($newValues),
+                $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
+                $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown'
+            ]);
+        } catch (Exception $e) {
+            error_log('Audit trail logging failed: ' . $e->getMessage());
+        }
     }
 }

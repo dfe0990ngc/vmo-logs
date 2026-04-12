@@ -1,368 +1,688 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { motion } from "framer-motion";
-
-import { useAuth } from "@/context/AuthContext";
-import { useDebounce } from "@/hooks/useDebounce";
-
-import DataTable from "@/features/documents/ui/DataTable";
-import FormDialog from "@/features/documents/ui/FormDialog";
-import DeleteDialog from "@/features/documents/ui/DeleteDialog";
-
+import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  useCreateDocument,
-  useDeleteDocument,
-  useDocumentFilters,
-  useDocuments,
-  useUpdateDocument,
-} from "@/features/documents/documents.hooks";
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  Download,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  BarChart3,
+  AlertCircle,
+} from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from './ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import { Label } from './ui/label';
+import { useDebounce } from 'use-debounce';
+import { toast } from 'sonner';
+import { api } from '../api/client';
+import { Badge } from './ui/badge';
 
-import { Document, UpdateDocumentDTO } from "@/features/documents/documents.types";
-import EmptyState from "./EmptyState";
-import { useDialogState, useManagementKeyboardShortcuts, usePagination } from "@/hooks/useManagementHooks";
-import PaginationControls from "./ui/PaginationControls";
-import FilterCard from "./ui/FilterCard";
+interface Communication {
+  id: number;
+  title: string;
+  communication_type: string;
+  status: string;
+  reference_no: string;
+  date_received: string;
+  file_name: string;
+  file_path: string;
+  created_at: string;
+}
+
+interface FilterOptions {
+  types: string[];
+  statuses: string[];
+}
+
+const statusColors: Record<string, string> = {
+  RECEIVED: 'bg-blue-100 text-blue-800',
+  RELEASED: 'bg-green-100 text-green-800',
+  COMPLETED: 'bg-purple-100 text-purple-800',
+  PULLED_OUT: 'bg-red-100 text-red-800',
+};
+
+const typeColors: Record<string, string> = {
+  MTOP: 'bg-indigo-100 text-indigo-800',
+  TRAVEL_ORDER: 'bg-cyan-100 text-cyan-800',
+  SB_RESOLUTION: 'bg-amber-100 text-amber-800',
+  SB_ORDINANCE: 'bg-rose-100 text-rose-800',
+  MEMO: 'bg-slate-100 text-slate-800',
+  OTHER: 'bg-gray-100 text-gray-800',
+};
 
 export default function CommunicationManagement() {
-  const { user: authUser } = useAuth();
-  const [isSaving, setIsSaving] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 500);
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null);
+  const [formData, setFormData] = useState({
+    title: '',
+    communication_type: 'OTHER',
+    status: 'RECEIVED',
+    reference_no: '',
+    date_received: new Date().toISOString().split('T')[0],
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Filters state
-  const { filters, updateFilters } = useDocumentFilters();
-  const [searchDocument, setSearchDocument] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [documentType, setDocumentType] = useState('all');
-  const [visibility, setVisibility] = useState('all');
+  // Fetch filter options
+  const { data: filterOptions } = useQuery<{ success: boolean; data: FilterOptions }>({
+    queryKey: ['filterOptions'],
+    queryFn: async () => {
+      const response = await api.get('/api/communications/filter-options');
+      return response.data;
+    },
+  });
 
-  const debouncedSearch = useDebounce(searchDocument, 500);
+  // Fetch communications
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['communications', page, debouncedSearch, typeFilter, statusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('limit', '10');
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (typeFilter) params.append('type', typeFilter);
+      if (statusFilter) params.append('status', statusFilter);
 
-  // Data fetching
-  const { data, isFetching, isError, error } = useDocuments(filters);
+      const response = await api.get(`/api/communications?${params}`);
+      return response.data;
+    },
+  });
 
-  const documents = data?.documents ?? [];
-  const pagination = data?.pagination;
+  // Create mutation
+  const createMutation = useMutation({
+    mutationFn: async (formPayload: FormData) => {
+      const response = await api.post('/api/communications', formPayload, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Communication created successfully');
+      queryClient.invalidateQueries({ queryKey: ['communications'] });
+      setIsDialogOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to create communication');
+    },
+  });
 
-  // Mutations
-  const createDocument = useCreateDocument();
-  const updateDocument = useUpdateDocument();
-  const deleteDocument = useDeleteDocument();
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: async (formPayload: FormData) => {
+      const response = await api.post(
+        `/api/communications/${selectedCommunication?.id}`,
+        formPayload,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Communication updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['communications'] });
+      setIsDialogOpen(false);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to update communication');
+    },
+  });
 
-  // Dialog state
-  const { activeDialog, selectedItem, openDialog, closeDialog } =
-    useDialogState<Document>();
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await api.delete(`/api/communications/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Communication deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['communications'] });
+      setIsDeleteDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to delete communication');
+    },
+  });
 
-  // Keyboard shortcuts
-  useManagementKeyboardShortcuts(
-    () => openDialog('create'),
-    searchInputRef
-  );
-
-  // Pagination
-  const paginationControls = usePagination(pagination, updateFilters, filters);
-
-  // Apply filters - ONLY reset page when actual filters change (not on every render)
-  useEffect(() => {
-    updateFilters({
-      search: debouncedSearch,
-      date_from: dateFrom,
-      date_to: dateTo,
-      visibility: visibility === 'all' ? '' : visibility,
-      document_type: documentType === 'all' ? '' : documentType,
-      limit: 10,
-      page: 1, // Reset to page 1 ONLY when filters change
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      communication_type: 'OTHER',
+      status: 'RECEIVED',
+      reference_no: '',
+      date_received: new Date().toISOString().split('T')[0],
     });
-  }, [debouncedSearch, dateFrom, dateTo, visibility, documentType, updateFilters]);
+    setSelectedFile(null);
+    setSelectedCommunication(null);
+  };
 
-  // Clear all filters
-  const clearAllFilters = useCallback(() => {
-    setSearchDocument('');
-    setDateFrom('');
-    setDateTo('');
-    setVisibility('all');
-    setDocumentType('all');
-  }, []);
-
-  // Get active filters for display
-  const activeFilters = useMemo(() => {
-    const filters = [];
-    
-    if (searchDocument) {
-      filters.push({
-        label: 'Search',
-        value: `"${searchDocument}"`,
-        color: 'bg-blue-100 text-blue-700',
+  const handleOpenDialog = (communication?: Communication) => {
+    if (communication) {
+      setSelectedCommunication(communication);
+      setFormData({
+        title: communication.title,
+        communication_type: communication.communication_type,
+        status: communication.status,
+        reference_no: communication.reference_no || '',
+        date_received: communication.date_received,
       });
+    } else {
+      resetForm();
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.title.trim()) {
+      toast.error('Title is required');
+      return;
     }
 
-    if (documentType !== 'all') {
-      filters.push({
-        label: 'Document Type',
-        value: documentType.charAt(0).toUpperCase() + documentType.slice(1),
-        color: 'bg-amber-100 text-amber-700',
-      });
+    const formPayload = new FormData();
+    Object.entries(formData).forEach(([key, value]) => {
+      formPayload.append(key, value);
+    });
+    if (selectedFile) {
+      formPayload.append('file', selectedFile);
     }
 
-    if (visibility !== 'all') {
-      filters.push({
-        label: 'Visibility',
-        value: visibility.charAt(0).toUpperCase() + visibility.slice(1),
-        color: 'bg-orange-100 text-orange-700',
-      });
+    if (selectedCommunication) {
+      updateMutation.mutate(formPayload);
+    } else {
+      createMutation.mutate(formPayload);
     }
-    
-    if (dateFrom) {
-      filters.push({
-        label: 'From',
-        value: dateFrom,
-        color: 'bg-purple-100 text-purple-700',
-      });
+  };
+
+  const handleDownload = (communication: Communication) => {
+    if (communication.file_path) {
+      window.location.href = `/vmo-logs/api/communications/${communication.id}/public-download`;
     }
-    
-    if (dateTo) {
-      filters.push({
-        label: 'To',
-        value: dateTo,
-        color: 'bg-green-100 text-green-700',
-      });
-    }
-    
-    return filters;
-  }, [searchDocument, dateFrom, dateTo, documentType, visibility]);
+  };
 
-  // Filter configurations
-  const filterConfigs = useMemo(() => [
-    {
-      id: 'documentType',
-      label: 'Document Type',
-      value: documentType,
-      onChange: setDocumentType,
-      options: [
-        { value: 'all', label: 'All Types' },
-        { value: 'agenda', label: 'Agenda' },
-        { value: 'session', label: 'Session' },
-        { value: 'minutes', label: 'Minutes' },
-        { value: 'ordinance', label: 'Ordinance' },
-        { value: 'resolution', label: 'Resolution' },
-        { value: 'report', label: 'Report' },
-        { value: 'forum', label: 'Forum' },
-        { value: 'attachment', label: 'Attachment' },
-      ],
-    },
-    {
-      id: 'visibility',
-      label: 'Visibility',
-      value: visibility,
-      onChange: setVisibility,
-      options: [
-        { value: 'all', label: 'All Visibility' },
-        { value: 'public', label: 'Public' },
-        { value: 'internal', label: 'Internal' },
-        { value: 'private', label: 'Private' },
-      ],
-    },
-    {
-      id: 'dateFrom',
-      label: 'Date From',
-      value: dateFrom,
-      onChange: setDateFrom,
-      type: 'date' as const,
-    },
-    {
-      id: 'dateTo',
-      label: 'Date To',
-      value: dateTo,
-      onChange: setDateTo,
-      type: 'date' as const,
-    },
-  ], [dateFrom, dateTo, documentType, visibility]);
-
-  // CRUD handlers with error handling
-  const handleCreate = useCallback(async (data: FormData) => {
-    setIsSaving(true);
-    try {
-      await createDocument.mutateAsync(data);
-      // toast.success('Document uploaded successfully');
-      closeDialog();
-    } catch (err: any) {
-      // toast.error(err?.message || 'Failed to upload document');
-    }finally{
-      setIsSaving(false);
-    }
-  }, [createDocument, closeDialog]);
-
-  const handleUpdate = useCallback(async (data: FormData) => {
-    if (!selectedItem) return;
-
-    setIsSaving(true);
-    try {
-      const params: UpdateDocumentDTO = {
-        id: Number(selectedItem.id),
-        payload: data,
-      };
-      await updateDocument.mutateAsync(params);
-      // toast.success('Document updated successfully');
-      closeDialog();
-    } catch (err: any) {
-      // toast.error(err?.message || 'Failed to update document');
-    }finally{
-      setIsSaving(false);
-    }
-  }, [selectedItem, updateDocument, closeDialog]);
-
-  const handleDelete = useCallback(async () => {
-    if (!selectedItem) return;
-    setIsSaving(true);
-    try {
-      await deleteDocument.mutateAsync(Number(selectedItem.id));
-      // toast.success('Document deleted successfully');
-      closeDialog();
-    } catch (err: any) {
-      // toast.error(err?.message || 'Failed to delete document');
-    }finally{
-      setIsSaving(false);
-    }
-  }, [selectedItem, deleteDocument, closeDialog]);
-
-  // Check if user can modify
-  const canModify = useMemo(
-    () => authUser && (authUser.user_type === 'Admin' || authUser.user_type === 'Staff' || authUser.user_type === 'Uploader'),
-    [authUser]
-  );
-
-  // Error state
-  if (isError) {
+  if (error) {
     return (
-      <div className="flex justify-center items-center p-8">
-        <EmptyState
-          title="Error loading documents"
-          description={error?.message || 'Something went wrong'}
-          action={
-            <Button onClick={() => window.location.reload()}>
-              Retry
-            </Button>
-          }
-        />
+      <div className="flex justify-center items-center h-96">
+        <Card className="bg-red-50 border-red-200 w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex gap-4">
+              <AlertCircle className="flex-shrink-0 mt-0.5 w-5 h-5 text-red-600" />
+              <div>
+                <h3 className="font-semibold text-red-900">Error Loading Communications</h3>
+                <p className="mt-1 text-red-700 text-sm">Please try again or contact support</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  const communications = data?.data || [];
+  const pagination = data?.pagination || { page: 1, pages: 1, total: 0 };
+
   return (
-    <motion.div 
-      initial={{
-        opacity: 0,
-      }}
-      animate={{
-        opacity: 1
-      }}
-      transition={{
-        delay: 0.1,
-        duration: 0.25,
-        type: 'tween',
-      }}
-      className="space-y-4 p-0 sm:p-4"
-    >
+    <div className="space-y-6">
       {/* Header */}
-      <div className="relative flex sm:flex-row flex-col justify-between items-start sm:items-center gap-4">
-        <div className="-top-8 right-0 absolute font-mono text-[11px]">
-          <span>New: <strong className="font-extrabold">[Alt + 1]</strong></span>&nbsp; 
-          <span>Search: <strong className="font-extrabold">[Ctrl + F]</strong></span>
-        </div>
+      <div className="flex sm:flex-row flex-col sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="font-medium text-lg">Document Management</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">Manage PDF Documents</p>
+          <h1 className="font-bold text-gray-900 text-3xl">Communications Management</h1>
+          <p className="mt-1 text-gray-600">Manage Vice Mayor's Office communications and logs</p>
         </div>
-        {canModify && (
-          <Button
-            onClick={() => openDialog('create')}
-            className="bg-[#008ea2] hover:bg-[#007a8b] w-full sm:w-auto"
-            aria-label="Upload document"
-          >
-            <Plus className="mr-2 w-4 h-4" />
-            Upload Document
-          </Button>
-        )}
+        <Button
+          onClick={() => handleOpenDialog()}
+          className="gap-2 bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+        >
+          <Plus className="w-4 h-4" />
+          New Communication
+        </Button>
       </div>
 
-      {/* Search & Filters */}
-      <FilterCard
-        searchValue={searchDocument}
-        onSearchChange={setSearchDocument}
-        searchPlaceholder="Search by document name, keywords..."
-        filters={filterConfigs}
-        activeFilters={activeFilters}
-        onClearAll={clearAllFilters}
-        isLoading={isFetching}
-      />
+      {/* Stats Cards */}
+      <div className="gap-4 grid grid-cols-1 md:grid-cols-4">
+        {[
+          { label: 'Total', value: pagination.total, color: 'blue' },
+          {
+            label: 'Received',
+            value: communications.filter((c) => c.status === 'RECEIVED').length,
+            color: 'indigo',
+          },
+          {
+            label: 'Released',
+            value: communications.filter((c) => c.status === 'RELEASED').length,
+            color: 'green',
+          },
+          {
+            label: 'Completed',
+            value: communications.filter((c) => c.status === 'COMPLETED').length,
+            color: 'purple',
+          },
+        ].map((stat, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.1 }}
+          >
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardContent className="pt-6">
+                <div>
+                  <p className="text-gray-600 text-sm">{stat.label}</p>
+                  <p className="mt-1 font-bold text-gray-900 text-2xl">{stat.value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
 
-      {/* Documents Table */}
-      {documents.length > 0 || isFetching ? (
-        <Card
-          className={`${isFetching ? "opacity-60 pointer-events-none" : ""} sm:gap-4 gap-2`}
-          role="region"
-          aria-label="Documents table"
-        >
-          <CardHeader className="relative">
-            {pagination && (
-              <div className="flex justify-end items-center">
-                <PaginationControls
-                  {...paginationControls}
-                  onPageChange={paginationControls.handlePageChange}
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="w-5 h-5" />
+            Filters
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="gap-4 grid grid-cols-1 md:grid-cols-4">
+            <div>
+              <Label className="block mb-2 text-gray-700 text-sm">Search</Label>
+              <div className="relative">
+                <Search className="top-3 left-3 absolute w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search by title or reference..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  className="pl-10"
                 />
               </div>
-            )}
-          </CardHeader>
+            </div>
 
-          <CardContent className="px-3 sm:px-6 sm:[&:last-child]:pb-6 [&:last-child]:pb-0 overflow-x-auto">
-            <DataTable
-              documents={documents}
-              onEdit={(d) => openDialog("edit", d)}
-              onDelete={(d) => openDialog("delete", d)}
-              onView={(d) => openDialog('view', d)}
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <EmptyState
-          title="No documents found"
-          description={
-            canModify
-              ? "Try adjusting your search or upload a new document to get started."
-              : "No documents available."
-          }
-          action={
-            canModify ? (
-              <Button onClick={() => openDialog("create")}>
-                <Plus className="mr-2 w-4 h-4" />
-                Upload Document
+            <div>
+              <Label className="block mb-2 text-gray-700 text-sm">Type</Label>
+              <Select value={typeFilter} onValueChange={(value) => {
+                setTypeFilter(value);
+                setPage(1);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All types</SelectItem>
+                  {filterOptions?.data?.types?.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type.replace(/_/g, ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="block mb-2 text-gray-700 text-sm">Status</Label>
+              <Select value={statusFilter} onValueChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All statuses</SelectItem>
+                  {filterOptions?.data?.statuses?.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status.replace(/_/g, ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearch('');
+                  setTypeFilter('');
+                  setStatusFilter('');
+                  setPage(1);
+                }}
+                className="w-full"
+              >
+                Clear Filters
               </Button>
-            ) : null
-          }
-        />
-      )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Dialogs */}
-      <FormDialog
-        open={activeDialog === 'create' || activeDialog === 'edit' || activeDialog === 'view'}
-        onClose={closeDialog}
-        onSave={activeDialog === 'create' ? handleCreate : handleUpdate}
-        document={selectedItem}
-        mode={activeDialog}
-        isSaving={isSaving}
-      />
+      {/* Communications Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Communications List</CardTitle>
+          <CardDescription>Total: {pagination.total} records</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="border-blue-600 border-b-2 rounded-full w-12 h-12 animate-spin"></div>
+            </div>
+          ) : communications.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-gray-500 text-lg">No communications found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-left">Title</th>
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-left">Type</th>
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-left">Status</th>
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-left">Reference</th>
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-left">Date</th>
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-left">File</th>
+                    <th className="px-4 py-3 font-semibold text-gray-900 text-sm text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <AnimatePresence>
+                    {communications.map((comm) => (
+                      <motion.tr
+                        key={comm.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="hover:bg-gray-50 border-b transition-colors"
+                      >
+                        <td className="px-4 py-3 font-medium text-gray-900 text-sm">{comm.title}</td>
+                        <td className="px-4 py-3">
+                          <Badge className={typeColors[comm.communication_type] || typeColors.OTHER}>
+                            {comm.communication_type.replace(/_/g, ' ')}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge className={statusColors[comm.status]}>
+                            {comm.status.replace(/_/g, ' ')}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-sm">{comm.reference_no || '—'}</td>
+                        <td className="px-4 py-3 text-gray-600 text-sm">
+                          {new Date(comm.date_received).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {comm.file_name ? (
+                            <span className="max-w-xs text-blue-600 truncate">{comm.file_name}</span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-center gap-2">
+                            {comm.file_path && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDownload(comm)}
+                                title="Download file"
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenDialog(comm)}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCommunication(comm);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
+          )}
 
-      {selectedItem && (
-        <DeleteDialog
-          open={activeDialog === 'delete'}
-          onClose={closeDialog}
-          document={selectedItem}
-          onConfirm={handleDelete}
-          isSaving={isSaving}
-        />
-      )}
-    </motion.div>
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <div className="flex justify-between items-center mt-6">
+              <p className="text-gray-600 text-sm">
+                Page {pagination.page} of {pagination.pages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                  let pageNum: number;
+                  if (pagination.pages <= 5) {
+                    pageNum = i + 1;
+                  } else if (page <= 3) {
+                    pageNum = i + 1;
+                  } else if (page >= pagination.pages - 2) {
+                    pageNum = pagination.pages - 4 + i;
+                  } else {
+                    pageNum = page - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === page ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(Math.min(pagination.pages, page + 1))}
+                  disabled={page === pagination.pages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedCommunication ? 'Edit Communication' : 'New Communication'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedCommunication
+                ? 'Update communication details'
+                : 'Create a new communication log entry'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Communication title"
+              />
+            </div>
+
+            <div className="gap-4 grid grid-cols-2">
+              <div>
+                <Label htmlFor="type">Type</Label>
+                <Select
+                  value={formData.communication_type}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, communication_type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filterOptions?.data?.types?.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filterOptions?.data?.statuses?.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="gap-4 grid grid-cols-2">
+              <div>
+                <Label htmlFor="reference">Reference No.</Label>
+                <Input
+                  id="reference"
+                  value={formData.reference_no}
+                  onChange={(e) => setFormData({ ...formData, reference_no: e.target.value })}
+                  placeholder="e.g., REF-2024-001"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="date">Date Received</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date_received}
+                  onChange={(e) => setFormData({ ...formData, date_received: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="file">Attachment</Label>
+              <Input
+                id="file"
+                type="file"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              />
+              {selectedFile && <p className="mt-1 text-gray-600 text-sm">{selectedFile.name}</p>}
+              {selectedCommunication?.file_name && !selectedFile && (
+                <p className="mt-1 text-gray-600 text-sm">Current: {selectedCommunication.file_name}</p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Communication?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedCommunication?.title}"? This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => selectedCommunication && deleteMutation.mutate(selectedCommunication.id)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

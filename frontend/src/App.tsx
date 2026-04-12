@@ -10,13 +10,6 @@ import Dashboard from './components/Dashboard';
 import { useAuth } from './context/AuthContext';
 import Profile from './components/Profile';
 import Settings from './components/Settings';
-import OrdinancesPage from './components/pages/OrdinancesPage';
-import EventsPage from './components/pages/EventsPage';
-import NewsPage from './components/pages/NewsPage';
-import ForumsPage from './components/pages/ForumsPage';
-import SessionsPage from './components/pages/SessionsPage';
-import ResolutionsPage from './components/pages/ResolutionsPage';
-import AboutPage from './components/pages/AboutPage';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
 import { Label } from './components/ui/label';
@@ -26,24 +19,9 @@ import { Alert, AlertDescription } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { toast } from 'sonner';
 import Logo from './assets/images/smart-sb.png';
-import TermManagement from './components/TermManagement';
-import PositionManagement from './components/PositionManagement';
-import StageManagement from './components/StageManagement';
-import CategoryManagement from './components/CategoryManagement';
-import TagManagement from './components/TagManagement';
-import CommitteeManagement from './components/CommitteeManagement';
-import MemberManagement from './components/MemberManagement';
 import UserManagement from './components/UserManagement';
-import DocumentManagement from './components/DocumentManagement';
-import ResolutionManagement from './components/ResolutionManagement';
-import OrdinanceManagement from './components/OrdinanceManagement';
-import SessionManagement from './components/SessionManagement';
-import ForumManagement from './components/ForumManagement';
-import PublicConsultationManagement from './components/PublicConsultationManagement';
-import NewsManagement from './components/NewsManagement';
-import LegislativeAgendaManagement from './components/LegislativeAgendaManagement';
-import EventManagement from './components/EventManagement';
 import AuditTrailManagement from './components/AuditTrailManagement';
+import CommunicationManagement from './components/CommunicationManagement';
 
 // Unauthorized page component
 function UnauthorizedPage() {
@@ -234,13 +212,6 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<WelcomeScreen />} />
         <Route path="/login" element={<WelcomeScreen />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/ordinances" element={<OrdinancesPage />} />
-        <Route path="/resolutions" element={<ResolutionsPage />} />
-        <Route path="/sessions" element={<SessionsPage />} />
-        <Route path="/forums" element={<ForumsPage />} />
-        <Route path="/news" element={<NewsPage />} />
-        <Route path="/events" element={<EventsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
@@ -253,13 +224,6 @@ function AppRoutes() {
         {/* Root and public pages → redirect to dashboard */}
         <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/login" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/about" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/ordinances" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/resolutions" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/sessions" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/forums" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/news" element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="/events" element={<Navigate to="/admin/dashboard" replace />} />
 
         {/* Dashboard */}
         <Route
@@ -271,15 +235,7 @@ function AppRoutes() {
           }
         />
 
-        {/* Members & Users */}
-        <Route
-          path="/admin/members"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <MemberManagement />
-            </ProtectedRoute>
-          }
-        />
+        {/* Users */}
         <Route
           path="/admin/users"
           element={
@@ -289,80 +245,12 @@ function AppRoutes() {
           }
         />
 
-        {/* Documents */}
+        {/* Communications */}
         <Route
-          path="/admin/documents"
+          path="/admin/communications"
           element={
             <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <DocumentManagement />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* News & Events */}
-        <Route
-          path="/admin/news"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <NewsManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/events"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <EventManagement />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Legislative */}
-        <Route
-          path="/admin/legislatives/agendas"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <LegislativeAgendaManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/legislatives/resolutions"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <ResolutionManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/legislatives/ordinances"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <OrdinanceManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/legislatives/sessions"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <SessionManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/legislatives/forums"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <ForumManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/legislatives/consultations"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <PublicConsultationManagement />
+              <CommunicationManagement />
             </ProtectedRoute>
           }
         />
@@ -373,56 +261,6 @@ function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
               <AuditTrailManagement />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Lookup / Reference Data */}
-        <Route
-          path="/admin/lookup/terms"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <TermManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/lookup/positions"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <PositionManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/lookup/stages"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <StageManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/lookup/categories"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <CategoryManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/lookup/tags"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <TagManagement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/lookup/committees"
-          element={
-            <ProtectedRoute allowedRoles={['Admin', 'Member', 'Staff', 'Tracker', 'Uploader']}>
-              <CommitteeManagement />
             </ProtectedRoute>
           }
         />

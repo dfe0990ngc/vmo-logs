@@ -26,7 +26,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import { get } from '@/api/requests';
-import { useTerms } from '@/features/terms/terms.hooks';
 
 interface DashboardStats {
   total_ordinances: StatValue;
