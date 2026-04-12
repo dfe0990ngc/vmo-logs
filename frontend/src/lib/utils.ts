@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { twMerge } from "tailwind-merge";
 
 export const appVersion: string = '2.0.0';
-export const appName: string = import.meta.env.VITE_APP_NAME || 'SMART-SB';
+export const appName: string = import.meta.env.VITE_APP_NAME || 'VMO-LOGS';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

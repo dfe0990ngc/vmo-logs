@@ -1,8 +1,8 @@
 import { AuthTokens } from "./types";
 
-export const ACCESS = "smart_sb_access_token";
-export const REFRESH = "smart_sb_refresh_token";
-export const EXPIRY = "smart_sb_token_expiry";
+export const ACCESS = "vmo_logs_access_token";
+export const REFRESH = "vmo_logs_refresh_token";
+export const EXPIRY = "vmo_logs_token_expiry";
 
 export const tokenStore = {
   set(tokens: AuthTokens) {

@@ -91,4 +91,4 @@ When deploying to cPanel, organize like this:
 
 ---
 
-This structure is scalable, maintainable, and follows industry best practices! 🚀# smart-sb-api
+This structure is scalable, maintainable, and follows industry best practices! 🚀# VMO-LOGS

@@ -13,7 +13,7 @@
 > A web-based legislative document management system for the  
 > **Sangguniang Bayan of Santa Cruz, Davao del Sur**
 
-**[🌐 Live Application](https://stacruz-sis.site/smart-sb)**
+**[🌐 Live Application](https://stacruz-sis.site/vmo-logs)**
 
 </div>
 
@@ -74,6 +74,6 @@ Developed for the **Sangguniang Bayan of Santa Cruz, Davao del Sur** as part of 
 
 Made with ❤️ for Santa Cruz, Davao del Sur
 
-**[🌐 Visit SMART-SB](https://stacruz-sis.site/smart-sb)**
+**[🌐 Visit SMART-SB](https://stacruz-sis.site/vmo-logs)**
 
 </div>

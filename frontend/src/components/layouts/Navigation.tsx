@@ -46,7 +46,7 @@ export default function Navigation({ showLoginButton = true }: NavigationProps) 
                 size="sm"
                 className="bg-transparent hover:bg-white ml-2 px-4 py-2 border-2 border-white font-semibold text-white hover:text-[#007a8b] hover:scale-105 transition-all"
               >
-                Member Login
+                Staff Login
               </Button>
             )}
           </nav>

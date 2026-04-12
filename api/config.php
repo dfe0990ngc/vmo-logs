@@ -34,7 +34,7 @@ define('LOGIN_RATE_WINDOW', (int) (getenv('LOGIN_RATE_WINDOW') ?: 900));
 
 // Paths
 define('RATE_LIMIT_CACHE_PATH', __DIR__ . '/storage/cache/ratelimit');
-define('FILE_ID_SECRET', 'SMART-SB');
+define('FILE_ID_SECRET', 'VMO-LOGS');
 define('LOG_PATH', __DIR__ . '/storage/logs');
 define('APP_ID', getenv('APP_ID') ?: '');
 
