@@ -66,21 +66,25 @@ $router->put('/api/users/{id}', [UserController::class, 'update'], [AuthMiddlewa
 $router->delete('/api/users/{id}', [UserController::class, 'delete'], [AuthMiddleware::class]);
 
 // communication routes (require authentication)
+// NOTE: Specific routes must come BEFORE generic routes with parameters
 $router->get('/api/ajax-communications', [CommunicationController::class, 'indexJSON']);
 $router->get('/api/communications/filter-options', [CommunicationController::class, 'filterOptions'], [AuthMiddleware::class]);
 $router->get('/api/communications', [CommunicationController::class, 'index'], [AuthMiddleware::class]);
+// Dynamic routes with {id} parameter - these must come after specific routes
+$router->get('/api/communications/{id}/public-download', [CommunicationController::class, 'publicDownload']);
 $router->get('/api/communications/{id}', [CommunicationController::class, 'show'], [AuthMiddleware::class]);
-$router->post('/api/communications', [CommunicationController::class, 'create'], [AuthMiddleware::class]);
 $router->post('/api/communications/{id}', [CommunicationController::class, 'update'], [AuthMiddleware::class]);
 $router->delete('/api/communications/{id}', [CommunicationController::class, 'delete'], [AuthMiddleware::class]);
-$router->get('/api/communications/{id}/public-download', [CommunicationController::class, 'publicDownload']);
+$router->post('/api/communications', [CommunicationController::class, 'create'], [AuthMiddleware::class]);
 
 // Audit Trail
+// NOTE: Specific routes must come BEFORE generic routes with parameters
 $router->get('/api/audit-trails', [AuditTrailController::class,'index'],[AuthMiddleware::class]);
 $router->get('/api/audit-trails/statistics', [AuditTrailController::class,'statistics'],[AuthMiddleware::class]);
+$router->get('/api/audit-trails/filter-options', [AuditTrailController::class,'filterOptions'],[AuthMiddleware::class]);
+// Dynamic routes with {id} parameter - these must come after specific routes
 $router->get('/api/audit-trails/entity/{entityType}/{entityId}', [AuditTrailController::class,'entityHistory'],[AuthMiddleware::class]);
 $router->get('/api/audit-trails/user/{userId}', [AuditTrailController::class,'userActivity'],[AuthMiddleware::class]);
-$router->get('/api/audit-trails/filter-options', [AuditTrailController::class,'filterOptions'],[AuthMiddleware::class]);
 $router->get('/api/audit-trails/{id}', [AuditTrailController::class,'show'],[AuthMiddleware::class]);
 
 // Settings routes (require authentication)
