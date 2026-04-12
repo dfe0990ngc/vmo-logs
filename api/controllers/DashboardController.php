@@ -245,14 +245,14 @@ class DashboardController extends Controller
             SELECT
                 at.id,
                 at.action,
-                at.entity,
+                at.entity_type AS entity,
                 at.entity_id,
                 at.description,
-                u.name      AS user_name,
-                u.user_type,
+                COALESCE(at.user_name, CONCAT_WS(' ', u.first_name, u.middle_name, u.last_name)) AS user_name,
+                COALESCE(at.user_type, u.user_type) AS user_type,
                 at.created_at AS time
             FROM audit_trails at
-            LEFT JOIN users u ON u.id = at.user_id
+            LEFT JOIN users u ON u.user_id = at.user_id
             ORDER BY at.created_at DESC
             LIMIT 10
         ");
