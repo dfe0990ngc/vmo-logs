@@ -711,8 +711,9 @@ export default function Dashboard() {
                       data={Object.entries(activeMemberAnalytics.actions_breakdown).map(([name, value]) => ({
                         name: name.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
                         value,
-                      }))
-                      cx="50%" cy="50%"
+                      }))}
+                      cx="50%"
+                      cy="50%"
                       innerRadius={35}
                       outerRadius={60}
                       dataKey="value"
