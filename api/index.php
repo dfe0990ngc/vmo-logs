@@ -88,6 +88,7 @@ $router->get('/api/settings/export-backup', [SettingsController::class, 'exportB
 $router->post('/api/settings/restore-backup', [SettingsController::class, 'restoreBackup'], [AuthMiddleware::class]);
 $router->post('/api/settings/clear-caches', [SettingsController::class, 'clearCaches'], [AuthMiddleware::class]);
 $router->post('/api/settings/clear-logs', [SettingsController::class, 'clearLogs'], [AuthMiddleware::class]);
+$router->post('/api/settings/archive-logs', [SettingsController::class, 'archiveLogs'], [AuthMiddleware::class]);
 
 // Welcome screen
 $router->get('/api/view-communications', [DashboardController::class, 'welcomeStats']);

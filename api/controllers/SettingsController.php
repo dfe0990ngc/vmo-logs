@@ -310,6 +310,112 @@ class SettingsController extends Controller
         };
     }
 
+    public function archiveLogs(): void
+    {
+        $this->checkPermission(['Admin']);
+
+        try {
+            $csvFilePath = $this->getLogArchiveStoragePath();
+            $timestamp = date('Y-m-d-H-i-s');
+            $csvFileName = "archive-{$timestamp}.csv";
+            $csvFullPath = "{$csvFilePath}/{$csvFileName}";
+
+            $archivedCount = $this->exportCommunicationsToCSV($csvFullPath);
+
+            if ($archivedCount === 0) {
+                $this->response(true, 'No communications found older than 15 days to archive.', [
+                    'archived_count' => 0,
+                    'csv_file' => null
+                ]);
+                return;
+            }
+
+            $this->deleteArchivedCommunications();
+
+            $this->response(true, "Successfully archived {$archivedCount} communications.", [
+                'archived_count' => $archivedCount,
+                'csv_file' => $csvFileName,
+                'message' => "Archived {$archivedCount} communications to {$csvFileName}"
+            ]);
+        } catch (Exception $e) {
+            $this->response(false, 'Archive failed: ' . $e->getMessage(), [], 500);
+        }
+    }
+
+    private function getLogArchiveStoragePath(): string
+    {
+        $storagePath = __DIR__ . '/../storage/logs';
+        if (!is_dir($storagePath) && !mkdir($storagePath, 0755, true) && !is_dir($storagePath)) {
+            throw new Exception('Unable to create logs storage directory.');
+        }
+
+        return $storagePath;
+    }
+
+    private function exportCommunicationsToCSV(string $csvFilePath): int
+    {
+        $cutoffDate = date('Y-m-d H:i:s', strtotime('-15 days'));
+
+        $communications = Database::fetchAll(
+            "SELECT c.id, c.title, c.communication_type, c.status, c.reference_no, 
+                    c.date_received, c.date_logged, c.file_name, c.file_size, 
+                    u.first_name, u.last_name, c.created_at, c.updated_at
+             FROM communications c
+             LEFT JOIN users u ON c.created_by = u.user_id
+             WHERE c.created_at < ?
+             ORDER BY c.created_at ASC",
+            [$cutoffDate]
+        );
+
+        if (empty($communications)) {
+            return 0;
+        }
+
+        $file = fopen($csvFilePath, 'w');
+        if ($file === false) {
+            throw new Exception('Unable to create CSV file for archiving.');
+        }
+
+        $headers = [
+            'id', 'title', 'communication_type', 'status', 'reference_no',
+            'date_received', 'date_logged', 'file_name', 'file_size',
+            'created_by_name', 'created_at', 'updated_at'
+        ];
+        fputcsv($file, $headers);
+
+        foreach ($communications as $row) {
+            $createdByName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            fputcsv($file, [
+                $row['id'] ?? '',
+                $row['title'] ?? '',
+                $row['communication_type'] ?? '',
+                $row['status'] ?? '',
+                $row['reference_no'] ?? '',
+                $row['date_received'] ?? '',
+                $row['date_logged'] ?? '',
+                $row['file_name'] ?? '',
+                $row['file_size'] ?? '',
+                $createdByName ?: 'Unknown',
+                $row['created_at'] ?? '',
+                $row['updated_at'] ?? '',
+            ]);
+        }
+
+        fclose($file);
+
+        return count($communications);
+    }
+
+    private function deleteArchivedCommunications(): void
+    {
+        $cutoffDate = date('Y-m-d H:i:s', strtotime('-15 days'));
+
+        Database::query(
+            "DELETE FROM communications WHERE created_at < ?",
+            [$cutoffDate]
+        );
+    }
+
     private function deleteDirectory(string $directory): void
     {
         if (!is_dir($directory)) {

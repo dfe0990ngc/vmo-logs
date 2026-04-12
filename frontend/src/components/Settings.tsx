@@ -1,19 +1,22 @@
 import { useRef, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Download, Trash2, FileText, Loader2, Server, AlertCircle, Upload } from 'lucide-react';
+import { Download, Trash2, FileText, Loader2, Server, AlertCircle, Upload, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { api } from '@/api/client';
 import { downloadBlob, post } from '@/api/requests';
 
-type ActionType = 'backup' | 'restore' | 'cache' | 'logs';
+type ActionType = 'backup' | 'restore' | 'cache' | 'logs' | 'archive';
 
 type ApiResponse = {
   success?: boolean;
   message?: string;
   safety_backup?: string | null;
+  archived_count?: number;
+  csv_file?: string | null;
   data?: {
     safety_backup?: string | null;
     note?: string;
@@ -22,11 +25,13 @@ type ApiResponse = {
 };
 
 export default function Settings() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState<Record<ActionType, boolean>>({
     backup: false,
     restore: false,
     cache: false,
     logs: false,
+    archive: false,
   });
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -148,6 +153,31 @@ export default function Settings() {
     }
   };
 
+  const handleArchiveLogs = async () => {
+    setLoading((prev) => ({ ...prev, archive: true }));
+
+    try {
+      const data = await post<ApiResponse>('/api/settings/archive-logs');
+
+      if (data.success) {
+        if (data.archived_count && data.archived_count > 0) {
+          toast.success(
+            `Archived ${data.archived_count} communications to file: ${data.csv_file}`
+          );
+        } else {
+          toast.info('No communications older than 15 days to archive.');
+        }
+      } else {
+        toast.error(data.message || 'Failed to archive logs.');
+      }
+    } catch (err) {
+      const message = (err as { message?: string })?.message || 'Failed to archive logs.';
+      toast.error(message);
+    } finally {
+      setLoading((prev) => ({ ...prev, archive: false }));
+    }
+  };
+
   return (
     <motion.div
       initial={{
@@ -175,7 +205,7 @@ export default function Settings() {
             <CardDescription>Export or restore backups of your application data.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-4 border rounded-lg gap-4">
+            <div className="flex justify-between items-center gap-4 p-4 border rounded-lg">
               <div>
                 <h3 className="font-semibold">Export Database Backup</h3>
                 <p className="text-muted-foreground text-sm">Download a zip file containing the database.</p>
@@ -186,7 +216,7 @@ export default function Settings() {
               </Button>
             </div>
 
-            <div className="flex justify-between items-center p-4 border rounded-lg gap-4">
+            <div className="flex justify-between items-center gap-4 p-4 border rounded-lg">
               <div>
                 <h3 className="font-semibold">Restore Database Backup</h3>
                 <p className="text-muted-foreground text-sm">
@@ -220,7 +250,7 @@ export default function Settings() {
             <CardDescription>Clear temporary system data like caches and logs.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-4 border rounded-lg gap-4">
+            <div className="flex justify-between items-center gap-4 p-4 border rounded-lg">
               <div>
                 <h3 className="font-semibold">Clear Caches</h3>
                 <p className="text-muted-foreground text-sm">Remove all application cache files.</p>
@@ -230,7 +260,7 @@ export default function Settings() {
                 Clear
               </Button>
             </div>
-            <div className="flex justify-between items-center p-4 border rounded-lg gap-4">
+            <div className="flex justify-between items-center gap-4 p-4 border rounded-lg">
               <div>
                 <h3 className="font-semibold">Clear Logs</h3>
                 <p className="text-muted-foreground text-sm">Remove all application log files.</p>
@@ -243,6 +273,37 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      {user?.user_type === 'Admin' && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle>Archive Communication Logs</CardTitle>
+            <CardDescription>Archive and remove old communication records from the system.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-between items-center gap-4 p-4 border border-blue-200 rounded-lg bg-white">
+              <div>
+                <h3 className="font-semibold">Archive Logs Older Than 15 Days</h3>
+                <p className="text-muted-foreground text-sm">
+                  Archived logs are saved to CSV and removed from the system to improve performance.
+                </p>
+              </div>
+              <Button 
+                onClick={handleArchiveLogs} 
+                disabled={loading.archive}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading.archive ? (
+                  <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                ) : (
+                  <Archive className="mr-2 w-4 h-4" />
+                )}
+                Archive
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Alert className="justify-start">
         <Server className="w-4 h-4" />
