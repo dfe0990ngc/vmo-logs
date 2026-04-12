@@ -68,7 +68,7 @@ $router->delete('/api/users/{id}', [UserController::class, 'delete'], [AuthMiddl
 // communication routes (require authentication)
 // NOTE: Specific routes must come BEFORE generic routes with parameters
 $router->get('/api/ajax-communications', [CommunicationController::class, 'indexJSON']);
-$router->get('/api/communications/filter-options', [CommunicationController::class, 'filterOptions'], [AuthMiddleware::class]);
+$router->get('/api/communications/filter-options', [CommunicationController::class, 'filterOptions']);
 $router->get('/api/communications', [CommunicationController::class, 'index'], [AuthMiddleware::class]);
 // Dynamic routes with {id} parameter - these must come after specific routes
 $router->get('/api/communications/{id}/public-download', [CommunicationController::class, 'publicDownload']);

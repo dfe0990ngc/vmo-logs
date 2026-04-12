@@ -1,6 +1,6 @@
-# smart-sb-frontend
+# vmo-logs-frontend
 
 
 on production remove replace the following
 
-/smart-sb to /
+/vmo-logs to /

@@ -102,7 +102,7 @@ function AppRoutes() {
       <div className="flex justify-center items-center bg-gradient-to-br from-[#008ea2] to-[#007a8b] p-4 sm:p-6 min-h-screen">
         <div className="flex flex-col space-y-4 w-full max-w-md">
           <div className="mb-8 text-center">
-            <h1 className="mb-2 font-bold text-white text-3xl">SMART-SB</h1>
+            <h1 className="mb-2 font-bold text-white text-3xl">VMO Logs</h1>
             <p className="text-blue-100 text-lg">Sangguniang Bayan ng Santa Cruz, Davao del Sur</p>
           </div>
 
@@ -114,11 +114,11 @@ function AppRoutes() {
             <Card className="relative bg-white/95 shadow-2xl backdrop-blur-sm">
               <CardHeader className="space-y-2 pb-4">
                 <div className="flex justify-center items-center gap-3">
-                  <img src={Logo} className="shadow-sm rounded-full w-24 h-24 max-h-24" alt="SMART-SB Logo" />
+                  <img src={Logo} className="shadow-sm rounded-full w-24 h-24 max-h-24" alt="VMO Logs Logo" />
                 </div>
                 <CardTitle className="font-bold text-gray-800 text-2xl text-center sm:text-start">Welcome Back</CardTitle>
                 <CardDescription className="text-gray-600 text-base text-center sm:text-start">
-                  Sign in to access the e-legislative management portal
+                  Sign in to access the VMO Communication Logs Management
                 </CardDescription>
               </CardHeader>
               <CardContent>
