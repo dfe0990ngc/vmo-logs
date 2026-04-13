@@ -26,15 +26,24 @@ class CommunicationController extends Controller
             $limit  = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit']))  : 10;
             $offset = ($page - 1) * $limit;
 
-            [$where, $params] = $this->buildFilters();
+            [$where, $params, $hasSearch] = $this->buildFilters();
 
             $total = (int) Database::fetch(
                 "SELECT COUNT(*) cnt FROM {$this->table} $where",
                 $params
             )['cnt'];
 
+            // Build order clause with search score if search is active
+            $orderClause = $hasSearch 
+                ? "ORDER BY relevance DESC, date_received DESC, id DESC" 
+                : "ORDER BY date_received DESC, id DESC";
+
+            $selectClause = $hasSearch
+                ? "SELECT *, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
+                : "SELECT * FROM {$this->table}";
+
             $communications = Database::fetchAll(
-                "SELECT * FROM {$this->table} $where ORDER BY date_received DESC, id DESC LIMIT ? OFFSET ?",
+                "$selectClause $where $orderClause LIMIT ? OFFSET ?",
                 [...$params, $limit, $offset]
             );
 
@@ -63,16 +72,24 @@ class CommunicationController extends Controller
             $limit  = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 10;
             $offset = ($page - 1) * $limit;
 
-            [$where, $params] = $this->buildFilters(withDate: false);
+            [$where, $params, $hasSearch] = $this->buildFilters(withDate: false);
 
             $total = (int) Database::fetch(
                 "SELECT COUNT(*) cnt FROM {$this->table} $where",
                 $params
             )['cnt'];
 
+            // Build order clause with search score if search is active
+            $orderClause = $hasSearch 
+                ? "ORDER BY relevance DESC, date_received DESC" 
+                : "ORDER BY date_received DESC";
+
+            $selectClause = $hasSearch
+                ? "SELECT id, title, communication_type, status, reference_no, date_received, file_name, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
+                : "SELECT id, title, communication_type, status, reference_no, date_received, file_name FROM {$this->table}";
+
             $communications = Database::fetchAll(
-                "SELECT id, title, communication_type, status, reference_no, date_received, file_name
-                 FROM {$this->table} $where ORDER BY date_received DESC LIMIT ? OFFSET ?",
+                "$selectClause $where $orderClause LIMIT ? OFFSET ?",
                 [...$params, $limit, $offset]
             );
 
@@ -363,17 +380,20 @@ class CommunicationController extends Controller
     /**
      * Build WHERE clause + params from $_GET filters.
      * When $withDate is false, date_from/date_to are ignored (public endpoint).
+     * Returns: [$where, $params, $hasSearch]
      */
     private function buildFilters(bool $withDate = true): array
     {
         $clauses = [];
         $params  = [];
+        $hasSearch = false;
 
         if (!empty($_GET['search'])) {
-            $search    = '%' . $_GET['search'] . '%';
-            $clauses[] = '(title LIKE ? OR reference_no LIKE ?)';
-            $params[]  = $search;
-            $params[]  = $search;
+            $searchTerm = $_GET['search'];
+            // Use FULLTEXT search with boolean mode
+            $clauses[] = "MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE)";
+            $params[]  = $searchTerm;
+            $hasSearch = true;
         }
 
         if (!empty($_GET['type'])) {
@@ -399,7 +419,7 @@ class CommunicationController extends Controller
 
         $where = $clauses ? 'WHERE ' . implode(' AND ', $clauses) : '';
 
-        return [$where, $params];
+        return [$where, $params, $hasSearch];
     }
     
     /**
