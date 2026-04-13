@@ -464,10 +464,10 @@ export default function WelcomeScreen() {
                     </div>
                   </div>
 
-                  {selectedCommunication.file_name && (
+                  {selectedCommunication.file_path && (
                     <div className="pt-4 border-t">
                       <p className="text-gray-500 text-sm">Attached File</p>
-                      <p className="font-semibold text-gray-900">{selectedCommunication.file_name}</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.file_path}</p>
                       {selectedCommunication.file_size && (
                         <p className="text-gray-500 text-sm">
                           Size: {(selectedCommunication.file_size / 1024).toFixed(2)} KB
