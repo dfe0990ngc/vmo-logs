@@ -456,7 +456,7 @@ export default function WelcomeScreen() {
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Updated At</p>
-                      <p className="font-semibold text-gray-900">{selectedCommunication.updated_at}</p>
+                      <p className="font-semibold text-gray-900">{formatDateTime(selectedCommunication.updated_at)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Updated By</p>
