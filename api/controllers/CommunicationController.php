@@ -120,7 +120,7 @@ class CommunicationController extends Controller
     public function create(): void
     {
         try {
-            $data     = json_decode(file_get_contents('php://input'), true);
+            $data     = $this->getJsonInput();
             $userId   = $_SERVER['HTTP_X_USER_ID']   ?? null;
             $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
 
@@ -161,7 +161,7 @@ class CommunicationController extends Controller
     public function update(int $id): void
     {
         try {
-            $data     = json_decode(file_get_contents('php://input'), true);
+            $data     = $this->getJsonInput();
             $userId   = $_SERVER['HTTP_X_USER_ID']   ?? null;
             $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
 
