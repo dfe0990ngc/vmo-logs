@@ -30,9 +30,9 @@ import { get } from '@/api/requests';
 interface DashboardStats {
   total_communications: StatValue;
   received: StatValue;
-  for_signing: StatValue;
-  signed: StatValue;
   released: StatValue;
+  completed: StatValue;
+  pulled_out: StatValue;
   total_users: StatValue;
   total_documents: StatValue;
 }
@@ -46,9 +46,9 @@ interface StatValue {
 interface TrendData {
   month: string;
   received: number;
-  for_signing: number;
-  signed: number;
   released: number;
+  completed: number;
+  pulled_out: number;
 }
 
 interface StatusDistribution {
@@ -319,40 +319,40 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* For Signing */}
+        {/* Completed */}
         <Card className="shadow-lg hover:shadow-xl border-0 hover:scale-[1.02] transition-all animate-slide-up duration-300 cursor-pointer glass" style={{ animationDelay: '200ms' }}>
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-2">
-            <CardTitle className="font-bold text-gray-800 text-sm">For Signing</CardTitle>
+            <CardTitle className="font-bold text-gray-800 text-sm">Completed</CardTitle>
             <div className="bg-yellow-100 p-2.5 rounded-lg">
               <ScrollText className="w-5 h-5 text-yellow-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-gray-900 text-3xl">{stats.for_signing.value}</div>
+            <div className="font-bold text-gray-900 text-3xl">{stats.completed.value}</div>
             <div className="flex items-center gap-1 mt-2 text-xs">
-              {stats.for_signing.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-600" /> : stats.for_signing.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-600" /> : null}
-              <span className={`font-semibold ${stats.for_signing.trend === 'up' ? 'text-green-600' : stats.for_signing.trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
-                {stats.for_signing.change > 0 ? '+' : ''}{stats.for_signing.change}%
+              {stats.completed.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-600" /> : stats.completed.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-600" /> : null}
+              <span className={`font-semibold ${stats.completed.trend === 'up' ? 'text-green-600' : stats.completed.trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
+                {stats.completed.change > 0 ? '+' : ''}{stats.completed.change}%
               </span>
               <span className="text-gray-600">from previous period</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Signed */}
+        {/* Pulled Out */}
         <Card className="shadow-lg hover:shadow-xl border-0 hover:scale-[1.02] transition-all animate-slide-up duration-300 cursor-pointer glass" style={{ animationDelay: '300ms' }}>
           <CardHeader className="flex flex-row justify-between items-center space-y-0 pb-2">
-            <CardTitle className="font-bold text-gray-800 text-sm">Signed</CardTitle>
+            <CardTitle className="font-bold text-gray-800 text-sm">Pulled Out</CardTitle>
             <div className="bg-purple-100 p-2.5 rounded-lg">
               <Gavel className="w-5 h-5 text-purple-600" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="font-bold text-gray-900 text-3xl">{stats.signed.value}</div>
+            <div className="font-bold text-gray-900 text-3xl">{stats.pulled_out.value}</div>
             <div className="flex items-center gap-1 mt-2 text-xs">
-              {stats.signed.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-600" /> : stats.signed.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-600" /> : null}
-              <span className={`font-semibold ${stats.signed.trend === 'up' ? 'text-green-600' : stats.signed.trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
-                {stats.signed.change > 0 ? '+' : ''}{stats.signed.change}%
+              {stats.pulled_out.trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-600" /> : stats.pulled_out.trend === 'down' ? <TrendingDown className="w-4 h-4 text-red-600" /> : null}
+              <span className={`font-semibold ${stats.pulled_out.trend === 'up' ? 'text-green-600' : stats.pulled_out.trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
+                {stats.pulled_out.change > 0 ? '+' : ''}{stats.pulled_out.change}%
               </span>
               <span className="text-gray-600">from previous period</span>
             </div>
@@ -432,10 +432,10 @@ export default function Dashboard() {
                 <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 12 }} />
                 <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
                 <Tooltip contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', border: 'none', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
-                <Line type="monotone" dataKey="received" stroke="#3b82f6" strokeWidth={2} name="Received" />
-                <Line type="monotone" dataKey="for_signing" stroke="#10b981" strokeWidth={2} name="For Signing" />
-                <Line type="monotone" dataKey="signed" stroke="#8b5cf6" strokeWidth={2} name="Signed" />
-                <Line type="monotone" dataKey="released" stroke="#f59e0b" strokeWidth={2} name="Released" />
+                <Line type="monotone" dataKey="received"   stroke="#3b82f6" strokeWidth={2} name="Received" />
+                <Line type="monotone" dataKey="released"   stroke="#10b981" strokeWidth={2} name="Released" />
+                <Line type="monotone" dataKey="completed"  stroke="#8b5cf6" strokeWidth={2} name="Completed" />
+                <Line type="monotone" dataKey="pulled_out" stroke="#f59e0b" strokeWidth={2} name="Pulled Out" />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>

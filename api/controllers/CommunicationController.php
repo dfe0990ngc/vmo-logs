@@ -400,7 +400,7 @@ class CommunicationController extends Controller
                                             'APPLICATION_LEAVE','MEMO','NOTICE_HEARING','INVITATION',
                                             'ENDORSEMENT','DSSC','MADAC','DOE','SOLICITATION',
                                             'TENT_REQUEST','OTHER'],
-                'statuses' => $statuses ?: ['RECEIVED','FOR_SIGNING','SIGNED','RELEASED'],
+                'statuses' => $statuses ?: ['RECEIVED','RELEASED','COMPLETED','PULLED_OUT'],
             ]);
         } catch (Exception $e) {
             $this->error('Failed to retrieve filter options', $e);

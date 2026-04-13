@@ -123,30 +123,30 @@ class DashboardController extends Controller
         [$py, $pm] = $this->previousPeriod($year, $month);
 
         $current = [
-            'total'       => $this->count($year, $month, $dateFrom, $dateTo),
-            'received'    => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'RECEIVED'"),
-            'for_signing' => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'FOR_SIGNING'"),
-            'signed'      => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'SIGNED'"),
-            'released'    => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'RELEASED'"),
+            'total'      => $this->count($year, $month, $dateFrom, $dateTo),
+            'received'   => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'RECEIVED'"),
+            'released'   => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'RELEASED'"),
+            'completed'  => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'COMPLETED'"),
+            'pulled_out' => $this->count($year, $month, $dateFrom, $dateTo, "AND c.status = 'PULLED_OUT'"),
         ];
 
         $previous = [
-            'total'       => $this->count($py, $pm, null, null),
-            'received'    => $this->count($py, $pm, null, null, "AND c.status = 'RECEIVED'"),
-            'for_signing' => $this->count($py, $pm, null, null, "AND c.status = 'FOR_SIGNING'"),
-            'signed'      => $this->count($py, $pm, null, null, "AND c.status = 'SIGNED'"),
-            'released'    => $this->count($py, $pm, null, null, "AND c.status = 'RELEASED'"),
+            'total'      => $this->count($py, $pm, null, null),
+            'received'   => $this->count($py, $pm, null, null, "AND c.status = 'RECEIVED'"),
+            'released'   => $this->count($py, $pm, null, null, "AND c.status = 'RELEASED'"),
+            'completed'  => $this->count($py, $pm, null, null, "AND c.status = 'COMPLETED'"),
+            'pulled_out' => $this->count($py, $pm, null, null, "AND c.status = 'PULLED_OUT'"),
         ];
 
         $totalUsers = (int) Database::fetch("SELECT COUNT(*) cnt FROM users")['cnt'];
         $totalDocs  = (int) Database::fetch("SELECT COUNT(*) cnt FROM communications WHERE file_path IS NOT NULL")['cnt'];
 
         return [
-            'total_communications' => $this->metric($current['total'],       $previous['total']),
-            'received'             => $this->metric($current['received'],    $previous['received']),
-            'for_signing'          => $this->metric($current['for_signing'], $previous['for_signing']),
-            'signed'               => $this->metric($current['signed'],      $previous['signed']),
-            'released'             => $this->metric($current['released'],    $previous['released']),
+            'total_communications' => $this->metric($current['total'],      $previous['total']),
+            'received'             => $this->metric($current['received'],   $previous['received']),
+            'released'             => $this->metric($current['released'],   $previous['released']),
+            'completed'            => $this->metric($current['completed'],  $previous['completed']),
+            'pulled_out'           => $this->metric($current['pulled_out'], $previous['pulled_out']),
             'total_users'          => ['value' => $totalUsers, 'change' => 0, 'trend' => 'stable'],
             'total_documents'      => ['value' => $totalDocs,  'change' => 0, 'trend' => 'stable'],
         ];
@@ -172,17 +172,17 @@ class DashboardController extends Controller
         $labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         foreach ($labels as $i => $label) {
             $months[$i] = [
-                'month'       => $label,
-                'received'    => 0,
-                'for_signing' => 0,
-                'signed'      => 0,
-                'released'    => 0,
+                'month'      => $label,
+                'received'   => 0,
+                'released'   => 0,
+                'completed'  => 0,
+                'pulled_out' => 0,
             ];
         }
 
         foreach ($rows as $r) {
             $idx = (int)$r['m'] - 1;
-            $key = strtolower($r['status']); // 'RECEIVED' → 'received' etc.
+            $key = strtolower($r['status']); // 'RECEIVED' → 'received', 'PULLED_OUT' → 'pulled_out'
             if (isset($months[$idx][$key])) {
                 $months[$idx][$key] = (int)$r['cnt'];
             }
@@ -226,7 +226,7 @@ class DashboardController extends Controller
             FROM communications c
             WHERE 1=1 {$where}
             GROUP BY status
-            ORDER BY FIELD(status, 'RECEIVED','FOR_SIGNING','SIGNED','RELEASED')
+            ORDER BY FIELD(status, 'RECEIVED','RELEASED','COMPLETED','PULLED_OUT')
         ", $params);
 
         return array_map(fn($r) => [
