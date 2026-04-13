@@ -121,7 +121,6 @@ export default function Dashboard() {
   const [filters, setFilters] = useState({
     year: new Date().getFullYear().toString(),
     month: '0',
-    term: '0',
   });
 
   // Fetch dashboard data
@@ -134,7 +133,6 @@ export default function Dashboard() {
         const params = new URLSearchParams({
           year: filters.year,
           month: filters.month,
-          term: filters.term,
         });
 
         const response = await get<DashboardData>(`/api/dashboard?${params}`);
@@ -272,18 +270,6 @@ export default function Dashboard() {
                       {option.label}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex-1 space-y-2 w-full sm:max-w-48">
-              <Label htmlFor="term" className="font-medium text-gray-700">Term</Label>
-              <Select value={filters.term} onValueChange={(value) => setFilters({ ...filters, term: value })}>
-                <SelectTrigger id="term" className="bg-white">
-                  <SelectValue placeholder="Select term" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">All Terms</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -161,6 +161,7 @@ export default function CommunicationManagement() {
     onSuccess: () => {
       toast.success('Communication created successfully');
       queryClient.invalidateQueries({ queryKey: ['communications'] });
+      setPage(1);
       setIsDialogOpen(false);
       resetForm();
     },
@@ -182,6 +183,7 @@ export default function CommunicationManagement() {
     onSuccess: () => {
       toast.success('Communication updated successfully');
       queryClient.invalidateQueries({ queryKey: ['communications'] });
+      setPage(1);
       setIsDialogOpen(false);
       resetForm();
     },

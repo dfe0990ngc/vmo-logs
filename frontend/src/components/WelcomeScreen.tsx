@@ -44,6 +44,11 @@ interface FilterOption {
   label: string;
 }
 
+interface FilterOptions {
+  types: FilterOption[];
+  statuses: string[];
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatDate = (dateString: string | null): string => {
@@ -83,7 +88,7 @@ export default function WelcomeScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [communicationTypeFilter, setCommunicationTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [filters, setFilters] = useState<FilterOption[]>([]);
+  const [filters, setFilters] = useState<FilterOptions>({ types: COMMUNICATION_TYPES, statuses: ['RECEIVED', 'RELEASED', 'COMPLETED', 'PULLED_OUT'] });
 
   // Modal state
   const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null);
@@ -128,14 +133,17 @@ export default function WelcomeScreen() {
     const loadFilters = async () => {
       try {
         const response = await fetchCommunicationsFilters();
-        if (response.success && response.communication_types) {
-          setFilters(response.communication_types);
+        if (response.success) {
+          setFilters({
+            types: response.communication_types || COMMUNICATION_TYPES,
+            statuses: response.statuses || ['RECEIVED', 'RELEASED', 'COMPLETED', 'PULLED_OUT'],
+          });
         } else {
-          setFilters(COMMUNICATION_TYPES);
+          setFilters({ types: COMMUNICATION_TYPES, statuses: ['RECEIVED', 'RELEASED', 'COMPLETED', 'PULLED_OUT'] });
         }
       } catch (error) {
         console.error('Failed to load filter options:', error);
-        setFilters(COMMUNICATION_TYPES);
+        setFilters({ types: COMMUNICATION_TYPES, statuses: ['RECEIVED', 'RELEASED', 'COMPLETED', 'PULLED_OUT'] });
       }
     };
 
@@ -213,7 +221,7 @@ export default function WelcomeScreen() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#008ea2] focus:ring-2"
             >
               <option value="">All Types</option>
-              {filters.map((filter) => (
+              {filters.types.map((filter) => (
                 <option key={filter.id} value={filter.name}>
                   {filter.label}
                 </option>
@@ -226,10 +234,11 @@ export default function WelcomeScreen() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-[#008ea2] focus:ring-2"
             >
               <option value="">All Status</option>
-              <option value="RECEIVED">Received</option>
-              <option value="RELEASED">Released</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="PULLED_OUT">Pulled Out</option>
+              {filters.statuses.map((status) => (
+                <option key={status} value={status}>
+                  {status.replace(/_/g, ' ')}
+                </option>
+              ))}
             </select>
           </div>
         </div>
