@@ -23,28 +23,45 @@ class CommunicationController extends Controller
     public function index(): void
     {
         try {
-            $page   = isset($_GET['page'])  ? max(1, (int)$_GET['page'])             : 1;
-            $limit  = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit']))  : 10;
+            $page   = isset($_GET['page'])  ? max(1, (int)$_GET['page'])            : 1;
+            $limit  = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 10;
             $offset = ($page - 1) * $limit;
 
             [$where, $params, $hasSearch] = $this->buildFilters();
 
             $total = (int) Database::fetch(
-                "SELECT COUNT(*) cnt FROM {$this->table} $where",
+                "SELECT COUNT(*) cnt
+                 FROM {$this->table} c
+                 $where",
                 $params
             )['cnt'];
 
-            $orderClause = $hasSearch
-                ? "ORDER BY c.relevance DESC, c.date_received DESC, c.id DESC"
-                : "ORDER BY c.date_received DESC, c.id DESC";
-
-            $selectClause = $hasSearch
-                ? "SELECT *, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table} c LEFT JOIN users uc ON c.created_by = uc.id LEFT JOIN users uu ON c.updated_by = uu.id"
-                : "SELECT c.*,CONCAT_WS(' ',uc.first_name,uc.last_name) as created_by_name, CONCAT_WS(' ',uu.first_name,uu.last_name) as updated_by_name FROM {$this->table} c LEFT JOIN users uc ON c.created_by = uc.id LEFT JOIN users uu ON c.updated_by = uu.id";
-
-            $queryParams = $hasSearch
-                ? [$_GET['search'], ...$params, $limit, $offset]
-                : [...$params, $limit, $offset];
+            if ($hasSearch) {
+                $searchTerm   = $_GET['search'];
+                $selectClause = "SELECT
+                                    c.*,
+                                    CONCAT_WS(' ', uc.first_name, uc.last_name) AS created_by_name,
+                                    CONCAT_WS(' ', uu.first_name, uu.last_name) AS updated_by_name,
+                                    MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE) AS relevance
+                                 FROM {$this->table} c
+                                 LEFT JOIN users uc ON c.created_by  = uc.id
+                                 LEFT JOIN users uu ON c.updated_by = uu.id";
+                $orderClause  = "ORDER BY relevance DESC, c.date_received DESC, c.id DESC";
+                // The search term for the MATCH in SELECT must come first,
+                // then the rest of the WHERE params (which already include the
+                // MATCH for the WHERE clause), then LIMIT/OFFSET.
+                $queryParams  = [$searchTerm, ...$params, $limit, $offset];
+            } else {
+                $selectClause = "SELECT
+                                    c.*,
+                                    CONCAT_WS(' ', uc.first_name, uc.last_name) AS created_by_name,
+                                    CONCAT_WS(' ', uu.first_name, uu.last_name) AS updated_by_name
+                                 FROM {$this->table} c
+                                 LEFT JOIN users uc ON c.created_by  = uc.id
+                                 LEFT JOIN users uu ON c.updated_by = uu.id";
+                $orderClause  = "ORDER BY c.date_received DESC, c.id DESC";
+                $queryParams  = [...$params, $limit, $offset];
+            }
 
             $communications = Database::fetchAll(
                 "$selectClause $where $orderClause LIMIT ? OFFSET ?",
@@ -76,54 +93,54 @@ class CommunicationController extends Controller
             $limit  = isset($_GET['limit']) ? min(100, max(1, (int)$_GET['limit'])) : 10;
             $offset = ($page - 1) * $limit;
 
-            [$where, $params, $hasSearch] = $this->buildFilters(withDate: false);
+            [$where, $params, $hasSearch] = $this->buildFilters();
 
             $total = (int) Database::fetch(
-                "SELECT COUNT(*) cnt FROM {$this->table} $where",
+                "SELECT COUNT(*) cnt
+                 FROM {$this->table} c
+                 $where",
                 $params
             )['cnt'];
 
-            $orderClause = $hasSearch
-                ? "ORDER BY relevance DESC, date_received DESC"
-                : "ORDER BY date_received DESC";
-
-            $selectClause = $hasSearch
-                ? "SELECT 
-                        c.id, c.title, 
-                        c.communication_type, 
-                        c.status, 
-                        c.reference_no, 
-                        c.date_received, 
-                        c.file_name, 
-                        c.file_path, 
-                        c.created_at, 
-                        c.updated_at, 
-                        CONCAT_WS(' ',uc.first_name,uc.last_name) as created_by_name, 
-                        CONCAT_WS(' ',uu.first_name,uu.last_name) as updated_by_name, 
-                        MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE) as relevance 
-                    FROM {$this->table} c 
-                    LEFT JOIN users uc ON c.created_by = uc.id 
-                    LEFT JOIN users uu ON c.updated_by = uu.id"
-                : "SELECT 
-                        c.id, 
-                        c.title, 
-                        c.communication_type, 
-                        c.status, 
-                        c.reference_no, 
-                        c.date_received, 
-                        c.file_name, 
-                        c.file_path, 
-                        c.created_at, 
-                        c.updated_at, 
-                        CONCAT_WS(' ',uc.first_name,uc.last_name) as created_by_name, 
-                        CONCAT_WS(' ',uu.first_name,uu.last_name) as updated_by_name 
-                    FROM {$this->table} c 
-                    LEFT JOIN users uc ON c.created_by = uc.id 
-                    LEFT JOIN users uu ON c.updated_by = uu.id";
-
-            $queryParams = $hasSearch
-                ? [$_GET['search'], ...$params, $limit, $offset]
-                : [...$params, $limit, $offset];
+            if ($hasSearch) {
+                $searchTerm   = $_GET['search'];
+                $selectClause = "SELECT
+                                    c.id, c.title,
+                                    c.communication_type,
+                                    c.status,
+                                    c.reference_no,
+                                    c.date_received,
+                                    c.file_name,
+                                    c.file_path,
+                                    c.created_at,
+                                    c.updated_at,
+                                    CONCAT_WS(' ', uc.first_name, uc.last_name) AS created_by_name,
+                                    CONCAT_WS(' ', uu.first_name, uu.last_name) AS updated_by_name,
+                                    MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE) AS relevance
+                                 FROM {$this->table} c
+                                 LEFT JOIN users uc ON c.created_by  = uc.id
+                                 LEFT JOIN users uu ON c.updated_by = uu.id";
+                $orderClause  = "ORDER BY relevance DESC, c.date_received DESC, c.id DESC";
+                $queryParams  = [$searchTerm, ...$params, $limit, $offset];
+            } else {
+                $selectClause = "SELECT
+                                    c.id, c.title,
+                                    c.communication_type,
+                                    c.status,
+                                    c.reference_no,
+                                    c.date_received,
+                                    c.file_name,
+                                    c.file_path,
+                                    c.created_at,
+                                    c.updated_at,
+                                    CONCAT_WS(' ', uc.first_name, uc.last_name) AS created_by_name,
+                                    CONCAT_WS(' ', uu.first_name, uu.last_name) AS updated_by_name
+                                 FROM {$this->table} c
+                                 LEFT JOIN users uc ON c.created_by  = uc.id
+                                 LEFT JOIN users uu ON c.updated_by = uu.id";
+                $orderClause  = "ORDER BY c.date_received DESC, c.id DESC";
+                $queryParams  = [...$params, $limit, $offset];
+            }
 
             $communications = Database::fetchAll(
                 "$selectClause $where $orderClause LIMIT ? OFFSET ?",
@@ -133,10 +150,10 @@ class CommunicationController extends Controller
             $this->response(true, 'Communications retrieved successfully', [
                 'data'       => $communications,
                 'pagination' => [
-                    'page'  => $page,
-                    'limit' => $limit,
-                    'total' => $total,
-                    'pages' => (int) ceil($total / $limit),
+                    'current_page' => $page,
+                    'per_page'     => $limit,
+                    'total'        => $total,
+                    'total_pages'  => (int) ceil($total / $limit),
                 ],
             ]);
         } catch (Exception $e) {
@@ -176,14 +193,13 @@ class CommunicationController extends Controller
     {
         try {
             $data = $this->getJsonInput();
-            // Fallback to $_POST if JSON input is empty (for FormData)
             if (empty($data)) {
                 $data = $_POST;
             }
 
             $userId = $this->getAuthenticatedUser();
-            $user = Database::fetch(
-                "SELECT id,user_id,user_type FROM users WHERE user_id = ?",
+            $user   = Database::fetch(
+                "SELECT id, user_id, user_type FROM users WHERE user_id = ?",
                 [$userId]
             );
 
@@ -230,24 +246,20 @@ class CommunicationController extends Controller
     {
         try {
             $data = $this->getJsonInput();
-            // Fallback to $_POST if JSON input is empty (for FormData)
             if (empty($data)) {
                 $data = $_POST;
             }
 
-            // Sanitize input
             $data = Validator::sanitizeArray($data);
 
-            // Normalize date_received: replace ISO 8601 'T' separator with a space
-            // and strip any extra trailing time segments (e.g. '2026-04-13 07:56:00:00')
             if (!empty($data['date_received'])) {
                 $data['date_received'] = str_replace('T', ' ', $data['date_received']);
                 $data['date_received'] = preg_replace('/(\d{2}:\d{2}:\d{2}):\d+$/', '$1', $data['date_received']);
             }
 
             $userId = $this->getAuthenticatedUser();
-            $user = Database::fetch(
-                "SELECT id,user_id,user_type FROM users WHERE user_id = ?",
+            $user   = Database::fetch(
+                "SELECT id, user_id, user_type FROM users WHERE user_id = ?",
                 [$userId]
             );
 
@@ -261,7 +273,6 @@ class CommunicationController extends Controller
                 return;
             }
 
-            // Validation rules (all optional for updates)
             $rules = [
                 'title'              => 'nullable|string|max:255',
                 'communication_type' => 'nullable|string|max:50',
@@ -283,12 +294,11 @@ class CommunicationController extends Controller
 
             if (!$validator->validate($data, $rules, $messages)) {
                 $this->response(false, 'Validation failed', [
-                    'errors' => $validator->getErrors()
+                    'errors' => $validator->getErrors(),
                 ], 422);
                 return;
             }
 
-            // Build update data
             $updateData    = [];
             $allowedFields = ['title', 'communication_type', 'status', 'reference_no', 'date_received'];
 
@@ -298,7 +308,6 @@ class CommunicationController extends Controller
                 }
             }
 
-            // Handle file upload
             if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
                 $this->deleteFile($oldData['file_path']);
                 $uploadResult = $this->handleFileUpload();
@@ -426,11 +435,11 @@ class CommunicationController extends Controller
             );
 
             $this->response(true, 'Filter options retrieved successfully', [
-                'types'    => $types    ?: ['MTOP','TRAVEL_ORDER','SB_RESOLUTION','SB_ORDINANCE',
-                                            'APPLICATION_LEAVE','MEMO','NOTICE_HEARING','INVITATION',
-                                            'ENDORSEMENT','DSSC','MADAC','DOE','SOLICITATION',
-                                            'TENT_REQUEST','OTHER'],
-                'statuses' => $statuses ?: ['RECEIVED','RELEASED','COMPLETED','PULLED_OUT'],
+                'types'    => $types    ?: ['MTOP', 'TRAVEL_ORDER', 'SB_RESOLUTION', 'SB_ORDINANCE',
+                                            'APPLICATION_LEAVE', 'MEMO', 'NOTICE_HEARING', 'INVITATION',
+                                            'ENDORSEMENT', 'DSSC', 'MADAC', 'DOE', 'SOLICITATION',
+                                            'TENT_REQUEST', 'OTHER'],
+                'statuses' => $statuses ?: ['RECEIVED', 'RELEASED', 'COMPLETED', 'PULLED_OUT'],
             ]);
         } catch (Exception $e) {
             $this->error('Failed to retrieve filter options', $e);
@@ -442,25 +451,31 @@ class CommunicationController extends Controller
      * ===================================================== */
 
     /**
-     * Build WHERE clause + params from $_GET filters.
-     * When $withDate is false, date_from/date_to are ignored (public endpoint).
+     * Build WHERE clause + bound params from $_GET filters.
+     *
+     * The search term is included in $params for the WHERE MATCH() clause.
+     * When $hasSearch is true, callers must prepend an extra copy of the
+     * search term to $queryParams for the SELECT MATCH() … AS relevance
+     * expression BEFORE spreading $params.
+     *
      * Returns: [$where, $params, $hasSearch]
      */
-    private function buildFilters(bool $withDate = true): array
+    private function buildFilters(): array
     {
         $clauses   = [];
         $params    = [];
         $hasSearch = false;
 
+        // Full-text search — adds one ? to $params for the WHERE MATCH()
         if (!empty($_GET['search'])) {
             $clauses[]  = "MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE)";
             $params[]   = $_GET['search'];
             $hasSearch  = true;
         }
 
-        if (!empty($_GET['type'])) {
+        if (!empty($_GET['communication_type'])) {
             $clauses[] = 'c.communication_type = ?';
-            $params[]  = $_GET['type'];
+            $params[]  = $_GET['communication_type'];
         }
 
         if (!empty($_GET['status'])) {
@@ -468,15 +483,15 @@ class CommunicationController extends Controller
             $params[]  = $_GET['status'];
         }
 
-        if ($withDate) {
-            if (!empty($_GET['date_from'])) {
-                $clauses[] = 'DATE(c.date_received) >= ?';
-                $params[]  = $_GET['date_from'];
-            }
-            if (!empty($_GET['date_to'])) {
-                $clauses[] = 'DATE(c.date_received) <= ?';
-                $params[]  = $_GET['date_to'];
-            }
+        // Date-range filter on date_received
+        if (!empty($_GET['date_from'])) {
+            $clauses[] = 'DATE(c.date_received) >= ?';
+            $params[]  = $_GET['date_from'];
+        }
+
+        if (!empty($_GET['date_to'])) {
+            $clauses[] = 'DATE(c.date_received) <= ?';
+            $params[]  = $_GET['date_to'];
         }
 
         $where = $clauses ? 'WHERE ' . implode(' AND ', $clauses) : '';

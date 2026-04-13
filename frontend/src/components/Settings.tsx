@@ -165,7 +165,7 @@ export default function Settings() {
             `Archived ${data.archived_count} communications to file: ${data.csv_file}`
           );
         } else {
-          toast.info('No communications older than 15 days to archive.');
+          toast.info(data?.message || 'No logs older than 15 days to archive.');
         }
       } else {
         toast.error(data.message || 'Failed to archive logs.');
@@ -275,13 +275,13 @@ export default function Settings() {
       </div>
 
       {user?.user_type === 'Admin' && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="bg-blue-50 border-blue-200">
           <CardHeader>
             <CardTitle>Archive Communication Logs</CardTitle>
             <CardDescription>Archive and remove old communication records from the system.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-between items-center gap-4 p-4 border border-blue-200 rounded-lg bg-white">
+            <div className="flex justify-between items-center gap-4 bg-white p-4 border border-blue-200 rounded-lg">
               <div>
                 <h3 className="font-semibold">Archive Logs Older Than 15 Days</h3>
                 <p className="text-muted-foreground text-sm">

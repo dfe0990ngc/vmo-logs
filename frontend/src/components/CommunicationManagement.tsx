@@ -8,6 +8,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -70,6 +71,8 @@ export default function CommunicationManagement() {
   const [debouncedSearch] = useDebounce(search, 500);
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [dialogState, setDialogState] = useState<FormDialogMode>({
     mode: 'create',
     communication: null,
@@ -96,14 +99,16 @@ export default function CommunicationManagement() {
 
   // Fetch communications
   const { data, isLoading, error } = useQuery({
-    queryKey: ['communications', page, debouncedSearch, typeFilter, statusFilter],
+    queryKey: ['communications', page, debouncedSearch, typeFilter, statusFilter, dateFrom, dateTo],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('page', page.toString());
       params.append('limit', '10');
       if (debouncedSearch) params.append('search', debouncedSearch);
-      if (typeFilter !== 'all') params.append('type', typeFilter);
+      if (typeFilter !== 'all') params.append('communication_type', typeFilter);
       if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
 
       const response = await api.get(`/api/communications?${params}`);
       return response.data;
@@ -120,9 +125,7 @@ export default function CommunicationManagement() {
     },
     onSuccess: () => {
       toast.success('Communication created successfully');
-      // Invalidate all communications queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: ['communications'] });
-      // Reset to first page after creation
       setPage(1);
       setIsFormDialogOpen(false);
       resetDialog();
@@ -213,6 +216,18 @@ export default function CommunicationManagement() {
     }
   };
 
+  const handleClearFilters = () => {
+    setSearch('');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  };
+
+  const hasActiveDateFilter = dateFrom || dateTo;
+  const hasActiveFilters = search || typeFilter !== 'all' || statusFilter !== 'all' || hasActiveDateFilter;
+
   if (error) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -252,7 +267,7 @@ export default function CommunicationManagement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="gap-4 grid grid-cols-1 md:grid-cols-4">
+      <div className="gap-4 grid grid-cols-2 md:grid-cols-4">
         {[
           { label: 'Total', value: pagination.total, color: 'blue' },
           {
@@ -291,14 +306,28 @@ export default function CommunicationManagement() {
 
       {/* Filters */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Filter className="w-5 h-5" />
             Filters
+            {hasActiveFilters && (
+              <span className="ml-auto">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="gap-1 h-7 text-gray-500 hover:text-gray-900 text-xs"
+                >
+                  <X className="w-3 h-3" />
+                  Clear all
+                </Button>
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="gap-4 grid grid-cols-1 md:grid-cols-4">
+          <div className="gap-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Search */}
             <div>
               <Label className="block mb-2 text-gray-700 text-sm">Search</Label>
               <div className="relative">
@@ -315,6 +344,7 @@ export default function CommunicationManagement() {
               </div>
             </div>
 
+            {/* Type */}
             <div>
               <Label className="block mb-2 text-gray-700 text-sm">Type</Label>
               <Select
@@ -338,6 +368,7 @@ export default function CommunicationManagement() {
               </Select>
             </div>
 
+            {/* Status */}
             <div>
               <Label className="block mb-2 text-gray-700 text-sm">Status</Label>
               <Select
@@ -361,19 +392,65 @@ export default function CommunicationManagement() {
               </Select>
             </div>
 
+            {/* Clear Filters Button */}
             <div className="flex items-end">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setSearch('');
-                  setTypeFilter('all');
-                  setStatusFilter('all');
-                  setPage(1);
-                }}
+                onClick={handleClearFilters}
                 className="w-full"
               >
                 Clear Filters
               </Button>
+            </div>
+
+            {/* Date Range — spans full width on all breakpoints */}
+            <div className="sm:col-span-2 lg:col-span-4">
+              <Label className="block mb-2 text-gray-700 text-sm">Date Received — Range</Label>
+              <div className="flex sm:flex-row flex-col items-start sm:items-center gap-2">
+                <div className="relative w-full sm:w-auto">
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={(e) => {
+                      setDateFrom(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full sm:w-44"
+                    placeholder="From"
+                  />
+                </div>
+                <span className="hidden sm:block text-gray-400 text-sm">to</span>
+                <span className="sm:hidden block text-gray-400 text-xs">to</span>
+                <div className="relative w-full sm:w-auto">
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={(e) => {
+                      setDateTo(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full sm:w-44"
+                    placeholder="To"
+                  />
+                </div>
+                {hasActiveDateFilter && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setDateFrom('');
+                      setDateTo('');
+                      setPage(1);
+                    }}
+                    className="gap-1 px-2 text-gray-500 hover:text-gray-900 text-xs"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear dates
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -393,6 +470,15 @@ export default function CommunicationManagement() {
           ) : communications.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-gray-500 text-lg">No communications found</p>
+              {hasActiveFilters && (
+                <Button
+                  variant="link"
+                  onClick={handleClearFilters}
+                  className="mt-2 text-[#008ea2]"
+                >
+                  Clear all filters
+                </Button>
+              )}
             </div>
           ) : (
             <>
@@ -435,6 +521,7 @@ export default function CommunicationManagement() {
                           variant={pageNum === page ? 'default' : 'outline'}
                           size="sm"
                           onClick={() => setPage(pageNum)}
+                          className={pageNum === page ? 'bg-[#008ea2] hover:bg-[#007a8b]' : ''}
                         >
                           {pageNum}
                         </Button>

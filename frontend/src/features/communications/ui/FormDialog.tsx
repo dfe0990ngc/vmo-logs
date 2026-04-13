@@ -94,6 +94,10 @@ function useForm(
         status:             communication.status,
         reference_no:       communication.reference_no ?? "",
         date_received:      communication.date_received ?? "",
+        created_by_name:   communication.created_by_name ?? "",
+        created_at:        communication.created_at ? communication.created_at.replace(" ", "T") : "",
+        updated_by_name:   communication.updated_by_name ?? "",
+        updated_at:        communication.updated_at ? communication.updated_at.replace(" ", "T") : "",
         file:               null,
       });
     } else if (mode === "create") {

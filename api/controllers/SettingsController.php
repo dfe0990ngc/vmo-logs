@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\controllers;
 
 use App\controllers\Controller;
+use App\core\AuditLogger;
 use App\core\Database;
+use App\core\R2StorageHelper;
 use Exception;
 use Ifsnop\Mysqldump\Mysqldump;
 use mysqli;
@@ -31,7 +33,7 @@ class SettingsController extends Controller
     public function clearLogs(): void
     {
         try {
-            $logDir = LOG_PATH;
+            $logDir  = LOG_PATH;
             $logFile = $logDir . '/php-error.log';
 
             if (file_exists($logFile)) {
@@ -48,6 +50,95 @@ class SettingsController extends Controller
         }
     }
 
+    /**
+     * Archive audit log records older than 15 days into a CSV file
+     * and upload it to R2/local storage.
+     *
+     * POST /api/settings/archive-logs
+     */
+    public function archiveLogs(): void
+    {
+        $tmpCsvPath = null;
+
+        try {
+            @ini_set('memory_limit', '256M');
+            @set_time_limit(0);
+
+            $cutoff = date('Y-m-d H:i:s', strtotime('-15 days'));
+
+            // Fetch all audit log rows older than 15 days
+            $rows = Database::fetchAll(
+                "SELECT * FROM audit_trails WHERE created_at < ? ORDER BY created_at ASC",
+                [$cutoff]
+            );
+
+            if (empty($rows)) {
+                $this->response(true, 'No audit log records older than 15 days found. Nothing to archive.', [
+                    'archived_count' => 0,
+                ]);
+                return;
+            }
+
+            // Write to a temporary CSV file
+            $timestamp  = date('Y-m-d-H-i-s');
+            $csvName    = "audit-logs-archive-{$timestamp}.csv";
+            $tmpCsvPath = sys_get_temp_dir() . '/' . $csvName;
+
+            $handle = fopen($tmpCsvPath, 'w');
+            if ($handle === false) {
+                throw new Exception('Unable to create temporary CSV file for archiving.');
+            }
+
+            // Write UTF-8 BOM so Excel opens the file correctly
+            fwrite($handle, "\xEF\xBB\xBF");
+
+            // Header row — derived from the first row's keys
+            fputcsv($handle, array_keys($rows[0]));
+
+            foreach ($rows as $row) {
+                fputcsv($handle, $row);
+            }
+
+            fclose($handle);
+            $handle = null;
+
+            // Upload to R2 / local storage
+            $r2Key  = 'archives/audit-logs/' . $csvName;
+            $result = R2StorageHelper::upload($tmpCsvPath, $r2Key, 'text/csv');
+
+            if (!$result['success']) {
+                throw new Exception('Failed to upload archive to storage: ' . ($result['message'] ?? 'Unknown error'));
+            }
+
+            // Delete the archived rows from the database
+            $archivedCount = count($rows);
+            Database::query(
+                "DELETE FROM audit_trails WHERE created_at < ?",
+                [$cutoff]
+            );
+
+            // Clean up the temporary file
+            if ($tmpCsvPath && file_exists($tmpCsvPath)) {
+                unlink($tmpCsvPath);
+                $tmpCsvPath = null;
+            }
+
+            $this->response(true, "Archived {$archivedCount} audit log record(s) successfully.", [
+                'archived_count' => $archivedCount,
+                'archive_file'   => $csvName,
+                'storage_key'    => $result['key'],
+                'cutoff_date'    => $cutoff,
+            ]);
+        } catch (Exception $e) {
+            // Always clean up the temp file on failure
+            if ($tmpCsvPath && file_exists($tmpCsvPath)) {
+                unlink($tmpCsvPath);
+            }
+
+            $this->response(false, 'Log archiving failed: ' . $e->getMessage(), [], 500);
+        }
+    }
+
     public function exportBackup(): void
     {
         $sqlFilePath = null;
@@ -59,7 +150,7 @@ class SettingsController extends Controller
 
         try {
             $storagePath = $this->getBackupStoragePath();
-            $timestamp = date('Y-m-d-H-i-s');
+            $timestamp   = date('Y-m-d-H-i-s');
             $sqlFileName = "backup-{$timestamp}.sql";
             $zipFileName = "backup-{$timestamp}.zip";
             $sqlFilePath = "{$storagePath}/{$sqlFileName}";
@@ -95,8 +186,8 @@ class SettingsController extends Controller
 
     public function restoreBackup(): void
     {
-        $tempDir = null;
-        $sqlFilePath = null;
+        $tempDir      = null;
+        $sqlFilePath  = null;
         $safetyBackup = null;
 
         if (!class_exists('ZipArchive')) {
@@ -117,7 +208,7 @@ class SettingsController extends Controller
             }
 
             $originalName = (string) ($file['name'] ?? '');
-            $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+            $extension    = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
             if (!in_array($extension, ['sql', 'zip'], true)) {
                 throw new Exception('Invalid backup file. Please upload a .sql or .zip backup.');
             }
@@ -145,12 +236,12 @@ class SettingsController extends Controller
 
             $this->response(true, 'Database restored successfully.', [
                 'safety_backup' => $safetyBackup['file_name'] ?? null,
-                'note' => 'A safety backup of the previous database state was created before restore.',
+                'note'          => 'A safety backup of the previous database state was created before restore.',
             ]);
         } catch (Exception $e) {
             $this->response(false, 'Restore failed: ' . $e->getMessage(), [
                 'safety_backup' => $safetyBackup['file_name'] ?? null,
-                'note' => 'Automatic rollback is not guaranteed for full SQL restores because DDL statements like DROP TABLE and CREATE TABLE are not reliably reversible as one transaction.',
+                'note'          => 'Automatic rollback is not guaranteed for full SQL restores because DDL statements like DROP TABLE and CREATE TABLE are not reliably reversible as one transaction.',
             ], 500);
         } finally {
             if ($tempDir && is_dir($tempDir)) {
@@ -158,6 +249,10 @@ class SettingsController extends Controller
             }
         }
     }
+
+    /* =====================================================
+     *  PRIVATE HELPERS
+     * ===================================================== */
 
     private function getBackupStoragePath(): string
     {
@@ -176,7 +271,7 @@ class SettingsController extends Controller
             DB_USER,
             DB_PASS,
             [
-                'add-drop-table' => true,
+                'add-drop-table'        => true,
                 'default-character-set' => 'utf8mb4',
             ]
         );
@@ -198,7 +293,7 @@ class SettingsController extends Controller
     private function createSafetyBackup(): array
     {
         $storagePath = $this->getBackupStoragePath();
-        $timestamp = date('Y-m-d-H-i-s');
+        $timestamp   = date('Y-m-d-H-i-s');
         $sqlFileName = "pre-restore-safety-{$timestamp}.sql";
         $zipFileName = "pre-restore-safety-{$timestamp}.zip";
         $sqlFilePath = "{$storagePath}/{$sqlFileName}";
@@ -264,7 +359,7 @@ class SettingsController extends Controller
             throw new Exception('Unable to read SQL backup contents.');
         }
 
-        $port = defined('DB_PORT') ? (int) DB_PORT : 3306;
+        $port   = defined('DB_PORT') ? (int) DB_PORT : 3306;
         $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, $port);
 
         if ($mysqli->connect_error) {
@@ -300,12 +395,12 @@ class SettingsController extends Controller
     {
         return match ($errorCode) {
             UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'The uploaded backup file is too large.',
-            UPLOAD_ERR_PARTIAL => 'The backup file was only partially uploaded. Please try again.',
-            UPLOAD_ERR_NO_FILE => 'Please select a backup file to restore.',
-            UPLOAD_ERR_NO_TMP_DIR => 'Server configuration error: missing temporary upload directory.',
-            UPLOAD_ERR_CANT_WRITE => 'Server error: failed to write the uploaded backup file.',
-            UPLOAD_ERR_EXTENSION => 'Server blocked the uploaded backup file.',
-            default => 'Unknown upload error while receiving the backup file.',
+            UPLOAD_ERR_PARTIAL                        => 'The backup file was only partially uploaded. Please try again.',
+            UPLOAD_ERR_NO_FILE                        => 'Please select a backup file to restore.',
+            UPLOAD_ERR_NO_TMP_DIR                     => 'Server configuration error: missing temporary upload directory.',
+            UPLOAD_ERR_CANT_WRITE                     => 'Server error: failed to write the uploaded backup file.',
+            UPLOAD_ERR_EXTENSION                      => 'Server blocked the uploaded backup file.',
+            default                                   => 'Unknown upload error while receiving the backup file.',
         };
     }
 
