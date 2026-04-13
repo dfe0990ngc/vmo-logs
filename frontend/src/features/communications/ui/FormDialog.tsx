@@ -190,7 +190,11 @@ const FormDialog = memo(
       submitData.append("communication_type", formData.communication_type);
       submitData.append("status",             formData.status);
       if (formData.reference_no.trim()) submitData.append("reference_no", formData.reference_no.trim());
-      if (formData.date_received)       submitData.append("date_received", formData.date_received);
+      if (formData.date_received) {
+        // Convert datetime-local format (YYYY-MM-DDTHH:mm) to Y-m-d H:i:s
+        const dateTime = formData.date_received.replace("T", " ") + ":00";
+        submitData.append("date_received", dateTime);
+      }
 
       await onSave(submitData as any);
       resetFormUI();
