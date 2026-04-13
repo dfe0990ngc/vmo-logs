@@ -358,10 +358,10 @@ const FormDialog = memo(
 
               {/* Date Received */}
               <div className="space-y-2">
-                <Label htmlFor="date_received">Date Received</Label>
+                <Label htmlFor="date_received">Date & Time Received</Label>
                 <Input
                   id="date_received"
-                  type="date"
+                  type="datetime-local"
                   readOnly={mode === "view"}
                   value={formData.date_received}
                   onChange={(e) => handleChange("date_received", e.target.value)}

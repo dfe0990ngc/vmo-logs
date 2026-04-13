@@ -143,7 +143,7 @@ class CommunicationController extends Controller
                 'communication_type' => $data['communication_type'] ?? 'OTHER',
                 'status' => $data['status'] ?? 'RECEIVED',
                 'reference_no' => $data['reference_no'] ?? null,
-                'date_received' => $data['date_received'] ?? date('Y-m-d'),
+                'date_received' => $data['date_received'] ?? date('Y-m-d H:i:s'),
                 'created_at' => date('Y-m-d H:i:s'),
                 'file_path' => $uploadResult['file_path'] ?? null,
                 'file_size' => $uploadResult['file_size'] ?? null,
@@ -195,7 +195,7 @@ class CommunicationController extends Controller
                 'communication_type' => 'nullable|string|max:50',
                 'status' => 'nullable|string|max:50',
                 'reference_no' => 'nullable|string|max:100',
-                'date_received' => 'nullable|date_format:Y-m-d',
+                'date_received' => 'nullable|date_format:Y-m-d H:i:s',
             ];
 
             $messages = [
@@ -203,7 +203,7 @@ class CommunicationController extends Controller
                 'communication_type.max' => 'Communication type must not exceed 50 characters',
                 'status.max' => 'Status must not exceed 50 characters',
                 'reference_no.max' => 'Reference number must not exceed 100 characters',
-                'date_received.date_format' => 'Date received must be in Y-m-d format',
+                'date_received.date_format' => 'Date received must be in Y-m-d H:i:s format',
             ];
 
             $validator = new Validator();
