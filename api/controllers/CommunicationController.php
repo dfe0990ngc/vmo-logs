@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\controllers\Controller;
+use App\core\AuditLogger;
 use App\Core\Database;
 use App\core\R2StorageHelper;
 use App\core\Validator;
@@ -33,16 +34,14 @@ class CommunicationController extends Controller
                 $params
             )['cnt'];
 
-            // Build order clause with search score if search is active
-            $orderClause = $hasSearch 
-                ? "ORDER BY relevance DESC, date_received DESC, id DESC" 
+            $orderClause = $hasSearch
+                ? "ORDER BY relevance DESC, date_received DESC, id DESC"
                 : "ORDER BY date_received DESC, id DESC";
 
             $selectClause = $hasSearch
                 ? "SELECT *, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
                 : "SELECT * FROM {$this->table}";
 
-            // Prepend the search term for the SELECT clause when search is active
             $queryParams = $hasSearch
                 ? [$_GET['search'], ...$params, $limit, $offset]
                 : [...$params, $limit, $offset];
@@ -84,16 +83,14 @@ class CommunicationController extends Controller
                 $params
             )['cnt'];
 
-            // Build order clause with search score if search is active
-            $orderClause = $hasSearch 
-                ? "ORDER BY relevance DESC, date_received DESC" 
+            $orderClause = $hasSearch
+                ? "ORDER BY relevance DESC, date_received DESC"
                 : "ORDER BY date_received DESC";
 
             $selectClause = $hasSearch
                 ? "SELECT id, title, communication_type, status, reference_no, date_received, file_name, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
                 : "SELECT id, title, communication_type, status, reference_no, date_received, file_name FROM {$this->table}";
 
-            // Prepend the search term for the SELECT clause when search is active
             $queryParams = $hasSearch
                 ? [$_GET['search'], ...$params, $limit, $offset]
                 : [...$params, $limit, $offset];
@@ -153,9 +150,12 @@ class CommunicationController extends Controller
             if (empty($data)) {
                 $data = $_POST;
             }
-            
-            $userId   = $_SERVER['HTTP_X_USER_ID']   ?? null;
-            $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
+
+            $userId = $this->getAuthenticatedUser();
+            $user = Database::fetch(
+                "SELECT id,user_id,user_type FROM users WHERE user_id = ?",
+                [$userId]
+            );
 
             if (!$data || empty($data['title'])) {
                 http_response_code(400);
@@ -165,20 +165,25 @@ class CommunicationController extends Controller
 
             $uploadResult = $this->handleFileUpload();
 
-            $commId = Database::insert($this->table,[
-                'title' => $data['title'],
+            $commId = Database::insert($this->table, [
+                'title'              => $data['title'],
                 'communication_type' => $data['communication_type'] ?? 'OTHER',
-                'status' => $data['status'] ?? 'RECEIVED',
-                'reference_no' => $data['reference_no'] ?? null,
-                'date_received' => $data['date_received'] ?? date('Y-m-d H:i:s'),
-                'created_at' => date('Y-m-d H:i:s'),
-                'file_path' => $uploadResult['file_path'] ?? null,
-                'file_size' => $uploadResult['file_size'] ?? null,
-                'created_by' => $userId,
+                'status'             => $data['status'] ?? 'RECEIVED',
+                'reference_no'       => $data['reference_no'] ?? null,
+                'date_received'      => $data['date_received'] ?? date('Y-m-d H:i:s'),
+                'created_at'         => date('Y-m-d H:i:s'),
+                'file_path'          => $uploadResult['file_path'] ?? null,
+                'file_size'          => $uploadResult['file_size'] ?? null,
+                'created_by'         => $user['id'] ?? null,
             ]);
 
-            $this->logAuditTrail($userId, $userName, 'CREATE', 'COMMUNICATION', $commId,
-                $data['title'], null, $data);
+            AuditLogger::logCreate(
+                'COMMUNICATION',
+                $commId,
+                $data['communication_type'] ?? 'OTHER',
+                $data,
+                "Created new communication record: {$data['title']} (ID: $commId)"
+            );
 
             http_response_code(201);
             $this->response(true, 'Communication created successfully', ['id' => $commId]);
@@ -203,8 +208,18 @@ class CommunicationController extends Controller
             // Sanitize input
             $data = Validator::sanitizeArray($data);
 
-            $userId   = $_SERVER['HTTP_X_USER_ID']   ?? null;
-            $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
+            // Normalize date_received: replace ISO 8601 'T' separator with a space
+            // and strip any extra trailing time segments (e.g. '2026-04-13 07:56:00:00')
+            if (!empty($data['date_received'])) {
+                $data['date_received'] = str_replace('T', ' ', $data['date_received']);
+                $data['date_received'] = preg_replace('/(\d{2}:\d{2}:\d{2}):\d+$/', '$1', $data['date_received']);
+            }
+
+            $userId = $this->getAuthenticatedUser();
+            $user = Database::fetch(
+                "SELECT id,user_id,user_type FROM users WHERE user_id = ?",
+                [$userId]
+            );
 
             $oldData = Database::fetch(
                 "SELECT * FROM {$this->table} WHERE id = ?",
@@ -218,18 +233,18 @@ class CommunicationController extends Controller
 
             // Validation rules (all optional for updates)
             $rules = [
-                'title' => 'nullable|string|max:255',
+                'title'              => 'nullable|string|max:255',
                 'communication_type' => 'nullable|string|max:50',
-                'status' => 'nullable|string|max:50',
-                'reference_no' => 'nullable|string|max:100',
-                'date_received' => 'nullable|date_format:Y-m-d H:i:s',
+                'status'             => 'nullable|string|max:50',
+                'reference_no'       => 'nullable|string|max:100',
+                'date_received'      => 'nullable|date_format:Y-m-d H:i:s',
             ];
 
             $messages = [
-                'title.max' => 'Title must not exceed 255 characters',
-                'communication_type.max' => 'Communication type must not exceed 50 characters',
-                'status.max' => 'Status must not exceed 50 characters',
-                'reference_no.max' => 'Reference number must not exceed 100 characters',
+                'title.max'                 => 'Title must not exceed 255 characters',
+                'communication_type.max'    => 'Communication type must not exceed 50 characters',
+                'status.max'                => 'Status must not exceed 50 characters',
+                'reference_no.max'          => 'Reference number must not exceed 100 characters',
                 'date_received.date_format' => 'Date received must be in Y-m-d H:i:s format',
             ];
 
@@ -240,10 +255,11 @@ class CommunicationController extends Controller
                 $this->response(false, 'Validation failed', [
                     'errors' => $validator->getErrors()
                 ], 422);
+                return;
             }
 
             // Build update data
-            $updateData = [];
+            $updateData    = [];
             $allowedFields = ['title', 'communication_type', 'status', 'reference_no', 'date_received'];
 
             foreach ($allowedFields as $field) {
@@ -267,12 +283,18 @@ class CommunicationController extends Controller
             }
 
             $updateData['updated_at'] = date('Y-m-d H:i:s');
-            $updateData['updated_by'] = $userId;
+            $updateData['updated_by'] = $user['id'] ?? null;
 
             Database::update($this->table, $updateData, 'id = :id', ['id' => $id]);
 
-            $this->logAuditTrail($userId, $userName, 'UPDATE', 'COMMUNICATION', $id,
-                $data['title'] ?? $oldData['title'], $oldData, array_merge($oldData, $data ?? []));
+            AuditLogger::logUpdate(
+                'COMMUNICATION',
+                $id,
+                $updateData['communication_type'] ?? $oldData['communication_type'],
+                $oldData,
+                $updateData,
+                $data['title'] ?? $oldData['title']
+            );
 
             $communication = Database::fetch(
                 "SELECT * FROM {$this->table} WHERE id = ?",
@@ -293,9 +315,6 @@ class CommunicationController extends Controller
     public function delete(int $id): void
     {
         try {
-            $userId   = $_SERVER['HTTP_X_USER_ID']   ?? null;
-            $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
-
             $communication = Database::fetch(
                 "SELECT * FROM {$this->table} WHERE id = ?",
                 [$id]
@@ -314,8 +333,13 @@ class CommunicationController extends Controller
                 [$id]
             );
 
-            $this->logAuditTrail($userId, $userName, 'DELETE', 'COMMUNICATION', $id,
-                $communication['title'], $communication, null);
+            AuditLogger::logDelete(
+                'COMMUNICATION',
+                $id,
+                $communication['communication_type'],
+                $communication,
+                "Deleted communication record: {$communication['title']} (ID: $id)"
+            );
 
             $this->response(true, 'Communication deleted successfully');
         } catch (Exception $e) {
@@ -394,16 +418,14 @@ class CommunicationController extends Controller
      */
     private function buildFilters(bool $withDate = true): array
     {
-        $clauses = [];
-        $params  = [];
+        $clauses   = [];
+        $params    = [];
         $hasSearch = false;
 
         if (!empty($_GET['search'])) {
-            $searchTerm = $_GET['search'];
-            // Use FULLTEXT search with boolean mode
-            $clauses[] = "MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE)";
-            $params[]  = $searchTerm;
-            $hasSearch = true;
+            $clauses[]  = "MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE)";
+            $params[]   = $_GET['search'];
+            $hasSearch  = true;
         }
 
         if (!empty($_GET['type'])) {
@@ -431,21 +453,20 @@ class CommunicationController extends Controller
 
         return [$where, $params, $hasSearch];
     }
-    
+
     /**
      * Validate the uploaded file and push it to R2.
-     * Returns the same shape as the old local handleFileUpload()
-     * so the rest of the controller stays unchanged.
      */
-    private function handleFileUpload(): array {
+    private function handleFileUpload(): array
+    {
         if (!isset($_FILES['file'])) {
             return ['success' => false, 'message' => 'No file uploaded'];
         }
 
         $result = R2StorageHelper::uploadFromRequest(
             $_FILES['file'],
-            'documents',                  // R2 folder prefix
-            ['application/pdf'],          // allowed MIME types
+            'documents',
+            ['application/pdf'],
             self::MAX_FILE_SIZE
         );
 
@@ -455,7 +476,7 @@ class CommunicationController extends Controller
 
         return [
             'success'   => true,
-            'file_path' => $result['key'],       // R2 key (replaces local relative path)
+            'file_path' => $result['key'],
             'file_size' => $result['file_size'],
         ];
     }
@@ -480,43 +501,5 @@ class CommunicationController extends Controller
     {
         http_response_code(500);
         $this->response(false, $message, ['error' => $e->getMessage()]);
-    }
-
-    /**
-     * Log an entry to audit_trails.
-     */
-    private function logAuditTrail(
-        mixed  $userId,
-        string $userName,
-        string $action,
-        string $entity,
-        mixed  $entityId,
-        string $entityName,
-        mixed  $oldValues,
-        mixed  $newValues
-    ): void {
-        try {
-            Database::query("
-                INSERT INTO audit_trails (
-                    user_id, user_name, user_type, action, entity_type,
-                    entity_id, entity_name, old_values, new_values,
-                    ip_address, user_agent, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            ", [
-                $userId,
-                $userName,
-                'Staff',
-                $action,
-                $entity,
-                $entityId,
-                $entityName,
-                json_encode($oldValues),
-                json_encode($newValues),
-                $_SERVER['REMOTE_ADDR']     ?? 'Unknown',
-                $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown',
-            ]);
-        } catch (Exception $e) {
-            error_log('Audit trail logging failed: ' . $e->getMessage());
-        }
     }
 }

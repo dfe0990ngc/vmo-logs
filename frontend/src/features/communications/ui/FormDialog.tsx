@@ -191,8 +191,9 @@ const FormDialog = memo(
       submitData.append("status",             formData.status);
       if (formData.reference_no.trim()) submitData.append("reference_no", formData.reference_no.trim());
       if (formData.date_received) {
-        // Convert datetime-local format (YYYY-MM-DDTHH:mm) to Y-m-d H:i:s
-        const dateTime = formData.date_received.replace("T", " ") + ":00";
+        const raw = formData.date_received.replace("T", " ");
+        // Only append ':00' seconds if not already present (HH:mm vs HH:mm:ss)
+        const dateTime = raw.length === 16 ? raw + ":00" : raw;
         submitData.append("date_received", dateTime);
       }
 
