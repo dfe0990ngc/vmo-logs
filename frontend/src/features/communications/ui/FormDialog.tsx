@@ -34,6 +34,10 @@ interface FormState {
   reference_no: string;
   date_received: string;
   file: File | null;
+  created_by_name?: string;
+  created_at?: string;
+  updated_by_name?: string;
+  updated_at?: string;
 }
 
 const DEFAULT_FORM: FormState = {
@@ -43,6 +47,10 @@ const DEFAULT_FORM: FormState = {
   reference_no: "",
   date_received: "",
   file: null,
+  created_by_name: "",
+  created_at: "",
+  updated_by_name: "",
+  updated_at: "",
 };
 
 const COMM_TYPES: { value: CommunicationType; label: string }[] = [
@@ -374,6 +382,59 @@ const FormDialog = memo(
                 />
               </div>
             </div>
+
+            {/* Created info */}
+            {mode === "create" && (
+              <>
+              <div className="gap-4 grid grid-cols-2">
+                {/* Created By Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="created_by_name">Created By</Label>
+                  <Input
+                    id="created_by_name"
+                    readOnly={true}
+                    value={formData.created_by_name}
+                  />
+                </div>
+
+                {/* Created At */}
+                <div className="space-y-2">
+                  <Label htmlFor="created_at">Date & Time Created</Label>
+                  <Input
+                    id="created_at"
+                    type="datetime-local"
+                    readOnly={true}
+                    value={formData.created_at}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="gap-4 grid grid-cols-2">
+                {/* Updated By Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="updated_by_name">Updated By</Label>
+                  <Input
+                    id="updated_by_name"
+                    readOnly={true}
+                    value={formData.updated_by_name}
+                  />
+                </div>
+
+                {/* Updated At */}
+                <div className="space-y-2">
+                  <Label htmlFor="updated_at">Date & Time Updated</Label>
+                  <Input
+                    id="updated_at"
+                    type="datetime-local"
+                    readOnly={true}
+                    value={formData.updated_at}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+              </>
+            )}
           </div>
 
           <DialogFooter className="pt-3 border-0 border-t">
