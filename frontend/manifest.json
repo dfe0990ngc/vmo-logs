@@ -1,7 +1,7 @@
 {
   "name": "VMO-LOGS",
   "short_name": "VMO-LOGS",
-  "description": "This web based application will help SB to enhance legislative document management and legislation tracking.",
+  "description": "This web based application will help VMO Staff to record and track communications.",
   "start_url": "/vmo-logs/",
   "scope": "/vmo-logs/",
   "display": "standalone",
