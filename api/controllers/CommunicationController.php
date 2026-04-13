@@ -6,7 +6,7 @@ namespace App\Controllers;
 
 use App\controllers\Controller;
 use App\core\AuditLogger;
-use App\Core\Database;
+use App\core\Database;
 use App\core\R2StorageHelper;
 use App\core\Validator;
 use Exception;
