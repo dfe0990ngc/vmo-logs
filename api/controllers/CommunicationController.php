@@ -147,7 +147,7 @@ class CommunicationController extends Controller
                 'created_at' => date('Y-m-d H:i:s'),
                 'file_path' => $uploadResult['file_path'] ?? null,
                 'file_size' => $uploadResult['file_size'] ?? null,
-                'user_id' => $userId,
+                'created_by' => $userId,
             ]);
 
             $this->logAuditTrail($userId, $userName, 'CREATE', 'COMMUNICATION', $commId,
@@ -240,6 +240,7 @@ class CommunicationController extends Controller
             }
 
             $updateData['updated_at'] = date('Y-m-d H:i:s');
+            $updateData['updated_by'] = $userId;
 
             Database::update($this->table, $updateData, 'id = :id', ['id' => $id]);
 
