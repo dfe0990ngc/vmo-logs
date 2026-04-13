@@ -80,7 +80,7 @@ const DataTableRow = memo(({ communication: comm, onEdit, onDelete, onView }: Da
   const canModify = user && (user.user_type === 'Admin' || user.user_type === 'Staff');
 
   return (
-    <TableRow className="sm:table-row flex-1 grid shadow-sm mb-3 sm:mb-0 py-3 sm:py-0 border border-gray-200 sm:border-gray-100 sm:border-b rounded-lg sm:rounded-none">
+    <TableRow className="sm:table-row flex flex-col shadow-sm mb-3 sm:mb-0 py-3 sm:py-0 border border-gray-200 sm:border-gray-100 sm:border-b rounded-lg sm:rounded-none">
       {/* Title */}
       <TableCell className="max-w-80">
         <div className="flex items-start gap-2">
