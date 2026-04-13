@@ -35,12 +35,12 @@ class CommunicationController extends Controller
             )['cnt'];
 
             $orderClause = $hasSearch
-                ? "ORDER BY relevance DESC, date_received DESC, id DESC"
-                : "ORDER BY date_received DESC, id DESC";
+                ? "ORDER BY c.relevance DESC, c.date_received DESC, c.id DESC"
+                : "ORDER BY c.date_received DESC, c.id DESC";
 
             $selectClause = $hasSearch
-                ? "SELECT *, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
-                : "SELECT * FROM {$this->table}";
+                ? "SELECT *, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table} c LEFT JOIN users uc ON c.created_by = uc.id LEFT JOIN users uu ON c.updated_by = uu.id"
+                : "SELECT c.*,CONCAT_WS(' ',uc.first_name,uc.last_name) as created_by_name, CONCAT_WS(' ',uu.first_name,uu.last_name) as updated_by_name FROM {$this->table} c LEFT JOIN users uc ON c.created_by = uc.id LEFT JOIN users uu ON c.updated_by = uu.id";
 
             $queryParams = $hasSearch
                 ? [$_GET['search'], ...$params, $limit, $offset]
@@ -88,8 +88,38 @@ class CommunicationController extends Controller
                 : "ORDER BY date_received DESC";
 
             $selectClause = $hasSearch
-                ? "SELECT id, title, communication_type, status, reference_no, date_received, file_name,file_path, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
-                : "SELECT id, title, communication_type, status, reference_no, date_received, file_name, file_path FROM {$this->table}";
+                ? "SELECT 
+                        c.id, c.title, 
+                        c.communication_type, 
+                        c.status, 
+                        c.reference_no, 
+                        c.date_received, 
+                        c.file_name, 
+                        c.file_path, 
+                        c.created_at, 
+                        c.updated_at, 
+                        CONCAT_WS(' ',uc.first_name,uc.last_name) as created_by_name, 
+                        CONCAT_WS(' ',uu.first_name,uu.last_name) as updated_by_name, 
+                        MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE) as relevance 
+                    FROM {$this->table} c 
+                    LEFT JOIN users uc ON c.created_by = uc.id 
+                    LEFT JOIN users uu ON c.updated_by = uu.id"
+                : "SELECT 
+                        c.id, 
+                        c.title, 
+                        c.communication_type, 
+                        c.status, 
+                        c.reference_no, 
+                        c.date_received, 
+                        c.file_name, 
+                        c.file_path, 
+                        c.created_at, 
+                        c.updated_at, 
+                        CONCAT_WS(' ',uc.first_name,uc.last_name) as created_by_name, 
+                        CONCAT_WS(' ',uu.first_name,uu.last_name) as updated_by_name 
+                    FROM {$this->table} c 
+                    LEFT JOIN users uc ON c.created_by = uc.id 
+                    LEFT JOIN users uu ON c.updated_by = uu.id";
 
             $queryParams = $hasSearch
                 ? [$_GET['search'], ...$params, $limit, $offset]
@@ -423,28 +453,28 @@ class CommunicationController extends Controller
         $hasSearch = false;
 
         if (!empty($_GET['search'])) {
-            $clauses[]  = "MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE)";
+            $clauses[]  = "MATCH(c.title, c.reference_no) AGAINST(? IN BOOLEAN MODE)";
             $params[]   = $_GET['search'];
             $hasSearch  = true;
         }
 
         if (!empty($_GET['type'])) {
-            $clauses[] = 'communication_type = ?';
+            $clauses[] = 'c.communication_type = ?';
             $params[]  = $_GET['type'];
         }
 
         if (!empty($_GET['status'])) {
-            $clauses[] = 'status = ?';
+            $clauses[] = 'c.status = ?';
             $params[]  = $_GET['status'];
         }
 
         if ($withDate) {
             if (!empty($_GET['date_from'])) {
-                $clauses[] = 'DATE(date_received) >= ?';
+                $clauses[] = 'DATE(c.date_received) >= ?';
                 $params[]  = $_GET['date_from'];
             }
             if (!empty($_GET['date_to'])) {
-                $clauses[] = 'DATE(date_received) <= ?';
+                $clauses[] = 'DATE(c.date_received) <= ?';
                 $params[]  = $_GET['date_to'];
             }
         }

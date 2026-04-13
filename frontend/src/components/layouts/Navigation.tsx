@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { appName } from '../../lib/utils';
-import Logo from '../../assets/images/smart-sb.png';
+import Logo from '../../assets/images/vmo.jpg';
 import { useAuth } from '../../context/AuthContext';
 
 interface NavigationProps {

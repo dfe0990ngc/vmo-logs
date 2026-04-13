@@ -18,7 +18,7 @@ import { Input } from './components/ui/input';
 import { Alert, AlertDescription } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { toast } from 'sonner';
-import Logo from './assets/images/smart-sb.png';
+import Logo from './assets/images/vmo.jpg';
 import UserManagement from './components/UserManagement';
 import AuditTrailManagement from './components/AuditTrailManagement';
 import CommunicationManagement from './components/CommunicationManagement';

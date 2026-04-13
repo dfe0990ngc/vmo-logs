@@ -10,6 +10,7 @@ import { Input } from './ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDebounce } from '@/hooks/useDebounce';
 import { triggerCommunicationPublicDownload } from '@/features/communications/communications.api';
+import { formatDateTime } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,15 +52,6 @@ interface FilterOptions {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatDate = (dateString: string | null): string => {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-};
 
 const STATUS_COLORS: Record<string, string> = {
   RECEIVED: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -322,7 +314,7 @@ export default function WelcomeScreen() {
                       </span>
                       <span className="flex items-center">
                         <Calendar className="mr-1 w-4 h-4" />
-                        {formatDate(communication.date_received)}
+                        {formatDateTime(communication.date_received)}
                       </span>
                       {communication.created_by_name && (
                         <span className="text-gray-500 text-xs">
@@ -452,15 +444,23 @@ export default function WelcomeScreen() {
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Date Received</p>
-                      <p className="font-semibold text-gray-900">{formatDate(selectedCommunication.date_received)}</p>
+                      <p className="font-semibold text-gray-900">{formatDateTime(selectedCommunication.date_received)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Date Logged</p>
-                      <p className="font-semibold text-gray-900">{formatDate(selectedCommunication.date_logged)}</p>
+                      <p className="font-semibold text-gray-900">{formatDateTime(selectedCommunication.created_at)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Created By</p>
                       <p className="font-semibold text-gray-900">{selectedCommunication.created_by_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Updated At</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.updated_at}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-sm">Updated By</p>
+                      <p className="font-semibold text-gray-900">{selectedCommunication.updated_by_name}</p>
                     </div>
                   </div>
 
