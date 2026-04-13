@@ -495,7 +495,7 @@ export default function WelcomeScreen() {
                       )}
                       View File
                     </Button>
-                    <Button
+                    {/* <Button
                       className="bg-[#008ea2] hover:bg-[#007a8b] text-white"
                       disabled={downloadingId === selectedCommunication.id}
                       onClick={() => handleDownload(selectedCommunication)}
@@ -506,7 +506,7 @@ export default function WelcomeScreen() {
                         <Download className="mr-2 w-4 h-4" />
                       )}
                       Download
-                    </Button>
+                    </Button> */}
                   </>
                 )}
                 <Button
