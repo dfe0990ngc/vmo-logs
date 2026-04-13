@@ -114,7 +114,7 @@ function AppRoutes() {
             <Card className="relative bg-white/95 shadow-2xl backdrop-blur-sm">
               <CardHeader className="space-y-2 pb-4">
                 <div className="flex justify-center items-center gap-3">
-                  <img src={Logo} className="shadow-sm rounded-full w-24 h-24 max-h-24" alt="VMO Logs Logo" />
+                  <img src={Logo} className="shadow-sm w-24 h-24 max-h-24" alt="VMO Logs Logo" />
                 </div>
                 <CardTitle className="font-bold text-gray-800 text-2xl text-center sm:text-start">Welcome Back</CardTitle>
                 <CardDescription className="text-gray-600 text-base text-center sm:text-start">

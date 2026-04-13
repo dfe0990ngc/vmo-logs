@@ -29,7 +29,7 @@ export default function Navigation({ showLoginButton = true }: NavigationProps) 
           {/* Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleNavigation('/')}>
             <div className="flex justify-center items-center w-10 sm:w-12 h-10 sm:h-12">
-              <img src={Logo} alt="Logo" className="rounded-full min-w-10 sm:min-w-12 min-h-10 sm:min-h-12" />
+              <img src={Logo} alt="Logo" className="min-w-10 sm:min-w-12 min-h-10 sm:min-h-12" />
             </div>
             <div className="text-white">
               <div className="font-bold text-base sm:text-xl leading-tight">{ appName }</div>
