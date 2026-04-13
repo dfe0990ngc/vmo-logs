@@ -88,8 +88,8 @@ class CommunicationController extends Controller
                 : "ORDER BY date_received DESC";
 
             $selectClause = $hasSearch
-                ? "SELECT id, title, communication_type, status, reference_no, date_received, file_name, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
-                : "SELECT id, title, communication_type, status, reference_no, date_received, file_name FROM {$this->table}";
+                ? "SELECT id, title, communication_type, status, reference_no, date_received, file_path, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
+                : "SELECT id, title, communication_type, status, reference_no, date_received, file_path FROM {$this->table}";
 
             $queryParams = $hasSearch
                 ? [$_GET['search'], ...$params, $limit, $offset]
