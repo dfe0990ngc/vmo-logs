@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Filter, FileText, Calendar, ChevronRight, X, Loader2 } from 'lucide-react';
+import { Search, Filter, FileText, Calendar, ChevronRight, X, Loader2, Download, Eye } from 'lucide-react';
 import Navigation from './layouts/Navigation';
 import {
   fetchCommunications,
@@ -9,6 +9,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDebounce } from '@/hooks/useDebounce';
+import { triggerCommunicationPublicDownload } from '@/features/communications/communications.api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,8 +94,43 @@ export default function WelcomeScreen() {
   // Modal state
   const [selectedCommunication, setSelectedCommunication] = useState<Communication | null>(null);
 
+  // Download loading state - tracks which communication ID is currently downloading
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   // Debounce search
   const debouncedSearch = useDebounce(searchTerm, 300);
+
+  // Download handler
+  const handleDownload = useCallback(async (comm: Communication, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (!comm.file_path) return;
+    setDownloadingId(comm.id);
+    try {
+      await triggerCommunicationPublicDownload(Number(comm.id));
+    } catch (error) {
+      console.error('Download failed:', error);
+    } finally {
+      setDownloadingId(null);
+    }
+  }, []);
+
+  // View handler - opens the file in a new tab
+  const handleView = useCallback(async (comm: Communication, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (!comm.file_path) return;
+    setDownloadingId(comm.id);
+    try {
+      await triggerCommunicationPublicDownload(Number(comm.id));
+    } catch (error) {
+      console.error('View failed:', error);
+    } finally {
+      setDownloadingId(null);
+    }
+  }, []);
 
   // Fetch communications
   useEffect(() => {
@@ -294,6 +330,40 @@ export default function WelcomeScreen() {
                         </span>
                       )}
                     </div>
+
+                    {/* Download & View Buttons for each communication */}
+                    {communication.file_path && (
+                      <div className="flex gap-2 mt-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="hover:bg-[#008ea2] border-[#008ea2] text-[#008ea2] hover:text-white"
+                          disabled={downloadingId === communication.id}
+                          onClick={(e) => handleView(communication, e)}
+                        >
+                          {downloadingId === communication.id ? (
+                            <Loader2 className="mr-1 w-4 h-4 animate-spin" />
+                          ) : (
+                            <Eye className="mr-1 w-4 h-4" />
+                          )}
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="hover:bg-gray-100 border-gray-300 text-gray-700"
+                          disabled={downloadingId === communication.id}
+                          onClick={(e) => handleDownload(communication, e)}
+                        >
+                          {downloadingId === communication.id ? (
+                            <Loader2 className="mr-1 w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="mr-1 w-4 h-4" />
+                          )}
+                          Download
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <ChevronRight className="flex-shrink-0 mt-1 w-5 h-5 text-gray-400" />
                 </motion.article>
@@ -410,6 +480,35 @@ export default function WelcomeScreen() {
 
               {/* Modal footer */}
               <div className="flex justify-end items-center gap-2 bg-gray-50 p-3 sm:p-6 border-gray-200 border-t rounded-b-xl">
+                {selectedCommunication.file_path && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="hover:bg-[#008ea2] border-[#008ea2] text-[#008ea2] hover:text-white"
+                      disabled={downloadingId === selectedCommunication.id}
+                      onClick={() => handleView(selectedCommunication)}
+                    >
+                      {downloadingId === selectedCommunication.id ? (
+                        <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                      ) : (
+                        <Eye className="mr-2 w-4 h-4" />
+                      )}
+                      View File
+                    </Button>
+                    <Button
+                      className="bg-[#008ea2] hover:bg-[#007a8b] text-white"
+                      disabled={downloadingId === selectedCommunication.id}
+                      onClick={() => handleDownload(selectedCommunication)}
+                    >
+                      {downloadingId === selectedCommunication.id ? (
+                        <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 w-4 h-4" />
+                      )}
+                      Download
+                    </Button>
+                  </>
+                )}
                 <Button
                   onClick={() => setSelectedCommunication(null)}
                   variant="outline"

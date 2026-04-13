@@ -6,40 +6,10 @@ namespace App\core;
 use App\core\Database;
 use App\core\Auth;
 
-/**
- * AuditLogger - Utility class for logging all system activities
- * 
- * Usage Examples:
- * 
- * 1. Log a CREATE action:
- *    AuditLogger::log('CREATE', 'members', $memberId, 'John Doe', 'Created new member', null, $newData);
- * 
- * 2. Log an UPDATE action:
- *    AuditLogger::log('UPDATE', 'members', $memberId, 'John Doe', 'Updated member details', $oldData, $newData);
- * 
- * 3. Log a DELETE action:
- *    AuditLogger::log('DELETE', 'members', $memberId, 'John Doe', 'Deleted member record', $deletedData);
- * 
- * 4. Log a LOGIN action:
- *    AuditLogger::log('LOGIN', 'users', $userId, $userName, 'User logged in successfully');
- * 
- * 5. Log an EXPORT action:
- *    AuditLogger::log('EXPORT', 'reports', null, 'Members Report', 'Exported members list to CSV');
- */
 class AuditLogger {
-    
+
     /**
      * Log an audit trail entry
-     * 
-     * @param string $action Action type (CREATE, UPDATE, DELETE, LOGIN, LOGOUT, ACCESS, EXPORT, IMPORT, OTHER)
-     * @param string $entityType Entity type (e.g., 'members', 'terms', 'ordinances')
-     * @param int|null $entityId ID of the affected entity
-     * @param string|null $entityName Name/identifier of the entity
-     * @param string|null $description Human-readable description
-     * @param array|null $oldValues Previous values (for UPDATE/DELETE)
-     * @param array|null $newValues New values (for CREATE/UPDATE)
-     * @param int|null $userId Override user ID (defaults to authenticated user)
-     * @return bool Success status
      */
     public static function log(
         string $action,
@@ -52,56 +22,59 @@ class AuditLogger {
         ?string $userId = null
     ): bool {
         try {
-            // Get user information
-            $userId = $userId ?? Auth::id();
-            
+            // ✅ Always use STRING user_id from Auth
             if (!$userId) {
-                // If no authenticated user, skip logging (optional: log as system)
-                $userId = "client";
-                // return false;
+                $authUser = Auth::user();
+                $userId = $authUser['user_id'] ?? null;
             }
-            
-            $user = self::getUserInfo($userId.'');
+
+            // ✅ Get user info safely
+            $user = $userId ? self::getUserInfo($userId) : null;
+
             if (!$user) {
-                // return false;
-                $user['name'] = 'Client Application';
-                $user['type'] = 'Client';
+                $user = [
+                    'name' => 'Client Application',
+                    'type' => 'Client'
+                ];
             }
-            
-            // Get client information
-            $ipAddress = self::getIpAddress();
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? null;
-            
-            // Prepare data for insertion
+
+            // ✅ Prepare audit data
             $data = [
-                'user_id' => $userId,
-                'user_name' => $user['name'],
-                'user_type' => $user['type'],
-                'action' => strtoupper($action),
+                'user_id'     => $userId, // string or null
+                'user_name'   => $user['name'], // ✅ FIXED
+                'user_type'   => $user['type'],
+                'action'      => strtoupper($action),
                 'entity_type' => $entityType,
-                'entity_id' => $entityId,
+                'entity_id'   => $entityId,
                 'entity_name' => $entityName,
                 'description' => $description,
-                'old_values' => $oldValues ? json_encode($oldValues, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
-                'new_values' => $newValues ? json_encode($newValues, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
-                'ip_address' => $ipAddress,
-                'user_agent' => $userAgent ? substr($userAgent, 0, 512) : null,
-                'created_at' => date('Y-m-d H:i:s'),
+                'old_values'  => $oldValues ? json_encode($oldValues, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
+                'new_values'  => $newValues ? json_encode($newValues, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
+                'ip_address'  => self::getIpAddress(),
+                'user_agent'  => isset($_SERVER['HTTP_USER_AGENT'])
+                    ? substr($_SERVER['HTTP_USER_AGENT'], 0, 512)
+                    : null,
+                'created_at'  => date('Y-m-d H:i:s'),
             ];
-            
-            // Insert into database
-            Database::insert('audit_trails', $data);
-            
-            return true;
+
+            // ✅ Insert into DB
+            $result = Database::insert('audit_trails', $data);
+
+            // ✅ Debug if insert fails
+            if (!$result) {
+                error_log('Audit insert failed: ' . json_encode($data));
+            }
+
+            return (bool)$result;
+
         } catch (\Exception $e) {
-            // Log error but don't throw exception to avoid breaking main flow
             error_log('Audit logging error: ' . $e->getMessage());
             return false;
         }
     }
-    
+
     /**
-     * Log a CREATE action
+     * Log CREATE
      */
     public static function logCreate(
         string $entityType,
@@ -113,9 +86,9 @@ class AuditLogger {
         $desc = $description ?? "Created new {$entityType} record";
         return self::log('CREATE', $entityType, $entityId, $entityName, $desc, null, $data);
     }
-    
+
     /**
-     * Log an UPDATE action
+     * Log UPDATE
      */
     public static function logUpdate(
         string $entityType,
@@ -128,9 +101,9 @@ class AuditLogger {
         $desc = $description ?? "Updated {$entityType} record";
         return self::log('UPDATE', $entityType, $entityId, $entityName, $desc, $oldData, $newData);
     }
-    
+
     /**
-     * Log a DELETE action
+     * Log DELETE
      */
     public static function logDelete(
         string $entityType,
@@ -142,45 +115,39 @@ class AuditLogger {
         $desc = $description ?? "Deleted {$entityType} record";
         return self::log('DELETE', $entityType, $entityId, $entityName, $desc, $data, null);
     }
-    
+
     /**
-     * Log a LOGIN action
+     * Log LOGIN
      */
     public static function logLogin(int $userId, string $userName): bool {
-        return self::log('LOGIN', 'users', $userId, $userName, 'User logged in successfully', null, null, $userName);
+        return self::log(
+            'LOGIN',
+            'users',
+            $userId,
+            $userName,
+            'User logged in successfully',
+            null,
+            null,
+            (string)$userId // ✅ FIXED
+        );
     }
-    
+
     /**
-     * Log a LOGOUT action
+     * Log LOGOUT
      */
     public static function logLogout(int $userId, string $userName): bool {
-        return self::log('LOGOUT', 'users', $userId, $userName, 'User logged out', null, null, $userName);
+        return self::log(
+            'LOGOUT',
+            'users',
+            $userId,
+            $userName,
+            'User logged out',
+            null,
+            null,
+            (string)$userId // ✅ FIXED
+        );
     }
-    
-    /**
-     * Log an ACCESS action
-     */
-    public static function logAccess(string $entityType, ?int $entityId = null, ?string $entityName = null): bool {
-        $desc = "Accessed {$entityType}" . ($entityName ? " - {$entityName}" : '');
-        return self::log('ACCESS', $entityType, $entityId, $entityName, $desc);
-    }
-    
-    /**
-     * Log an EXPORT action
-     */
-    public static function logExport(string $entityType, string $exportName, ?array $filters = null): bool {
-        $desc = "Exported {$exportName}";
-        return self::log('EXPORT', $entityType, null, $exportName, $desc, null, $filters);
-    }
-    
-    /**
-     * Log an IMPORT action
-     */
-    public static function logImport(string $entityType, string $importName, int $recordCount): bool {
-        $desc = "Imported {$recordCount} records into {$entityType}";
-        return self::log('IMPORT', $entityType, null, $importName, $desc, null, ['record_count' => $recordCount]);
-    }
-    
+
     /**
      * Get user information
      */
@@ -190,14 +157,14 @@ class AuditLogger {
              FROM users WHERE user_id = ?",
             [$userId]
         );
-        
+
         return $user ? [
-            'id' => $user['user_id'],
+            'id'   => $user['user_id'],
             'name' => $user['name'],
             'type' => $user['user_type']
         ] : null;
     }
-    
+
     /**
      * Get client IP address
      */
@@ -211,21 +178,21 @@ class AuditLogger {
             'HTTP_FORWARDED',
             'REMOTE_ADDR'
         ];
-        
+
         foreach ($ipKeys as $key) {
             if (!empty($_SERVER[$key])) {
                 $ips = explode(',', $_SERVER[$key]);
                 $ip = trim($ips[0]);
-                
+
                 if (filter_var($ip, FILTER_VALIDATE_IP)) {
                     return $ip;
                 }
             }
         }
-        
+
         return $_SERVER['REMOTE_ADDR'] ?? null;
     }
-    
+
     /**
      * Get audit trail for specific entity
      */
@@ -238,11 +205,11 @@ class AuditLogger {
             [$entityType, $entityId, $limit]
         );
     }
-    
+
     /**
      * Get audit trail for specific user
      */
-    public static function getUserActivity(int $userId, int $limit = 50): array {
+    public static function getUserActivity(string $userId, int $limit = 50): array {
         return Database::fetchAll(
             "SELECT * FROM audit_trails 
              WHERE user_id = ? 
@@ -251,7 +218,7 @@ class AuditLogger {
             [$userId, $limit]
         );
     }
-    
+
     /**
      * Get recent audit trails
      */
