@@ -19,7 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Button } from './button';
 import { Avatar, AvatarFallback } from './avatar';
 import { appName, appVersion } from '../../lib/utils';
-import Logo from '../../assets/images/logo.png';
+import Logo from '../../assets/images/vmo.jpg';
 
 interface MenuItem {
   id: string;

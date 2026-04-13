@@ -32,12 +32,6 @@ import {
   Settings,
   LogOut,
   User,
-  Users,
-  Newspaper,
-  Calendar,
-  Scale,
-  FolderTree,
-  BookOpen,
   History,
   ChevronDown,
   ChevronRight,
@@ -45,7 +39,7 @@ import {
 } from 'lucide-react';
 
 import { appName } from '../../lib/utils';
-import Logo from '../../assets/images/logo.png';
+import Logo from '../../assets/images/vmo.jpg';
 
 interface DashboardLayoutProps {
   children: ReactNode;
