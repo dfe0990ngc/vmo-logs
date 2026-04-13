@@ -384,7 +384,7 @@ const FormDialog = memo(
             </div>
 
             {/* Created info */}
-            {mode === "create" && (
+            {mode === "view" && (
               <>
               <div className="gap-4 grid grid-cols-2">
                 {/* Created By Name */}
