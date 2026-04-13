@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\controllers\Controller;
 use App\Core\Database;
 use App\core\R2StorageHelper;
+use App\core\Validator;
 use Exception;
 
 class CommunicationController extends Controller
@@ -138,15 +139,15 @@ class CommunicationController extends Controller
             $uploadResult = $this->handleFileUpload();
 
             $commId = Database::insert($this->table,[
-                $data['title'],
-                $data['communication_type'] ?? 'OTHER',
-                $data['status']             ?? 'RECEIVED',
-                $data['reference_no']       ?? null,
-                $data['date_received']      ?? date('Y-m-d'),
-                date('Y-m-d H:i:s'),
-                $uploadResult['file_path'] ?? null,
-                $uploadResult['file_size'] ?? null,
-                $userId,
+                'title' => $data['title'],
+                'communication_type' => $data['communication_type'] ?? 'OTHER',
+                'status' => $data['status'] ?? 'RECEIVED',
+                'reference_no' => $data['reference_no'] ?? null,
+                'date_received' => $data['date_received'] ?? date('Y-m-d'),
+                'created_at' => date('Y-m-d H:i:s'),
+                'file_path' => $uploadResult['file_path'] ?? null,
+                'file_size' => $uploadResult['file_size'] ?? null,
+                'user_id' => $userId,
             ]);
 
             $this->logAuditTrail($userId, $userName, 'CREATE', 'COMMUNICATION', $commId,
@@ -171,7 +172,10 @@ class CommunicationController extends Controller
             if (empty($data)) {
                 $data = $_POST;
             }
-            
+
+            // Sanitize input
+            $data = Validator::sanitizeArray($data);
+
             $userId   = $_SERVER['HTTP_X_USER_ID']   ?? null;
             $userName = $_SERVER['HTTP_X_USER_NAME'] ?? 'Unknown';
 
@@ -181,51 +185,75 @@ class CommunicationController extends Controller
             );
 
             if (!$oldData) {
-                http_response_code(404);
-                $this->response(false, 'Communication not found');
+                $this->response(false, 'Communication not found', [], 404);
                 return;
             }
 
-            $setClauses = [];
-            $params     = [];
+            // Validation rules (all optional for updates)
+            $rules = [
+                'title' => 'nullable|string|max:255',
+                'communication_type' => 'nullable|string|max:50',
+                'status' => 'nullable|string|max:50',
+                'reference_no' => 'nullable|string|max:100',
+                'date_received' => 'nullable|date_format:Y-m-d',
+            ];
+
+            $messages = [
+                'title.max' => 'Title must not exceed 255 characters',
+                'communication_type.max' => 'Communication type must not exceed 50 characters',
+                'status.max' => 'Status must not exceed 50 characters',
+                'reference_no.max' => 'Reference number must not exceed 100 characters',
+                'date_received.date_format' => 'Date received must be in Y-m-d format',
+            ];
+
+            $validator = new Validator();
+            $validator->setDatabase(Database::getInstance());
+
+            if (!$validator->validate($data, $rules, $messages)) {
+                $this->response(false, 'Validation failed', [
+                    'errors' => $validator->getErrors()
+                ], 422);
+            }
+
+            // Build update data
+            $updateData = [];
+            $allowedFields = ['title', 'communication_type', 'status', 'reference_no', 'date_received'];
+
+            foreach ($allowedFields as $field) {
+                if (isset($data[$field]) && $data[$field] !== $oldData[$field]) {
+                    $updateData[$field] = $data[$field];
+                }
+            }
 
             // Handle file upload
             if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
                 $this->deleteFile($oldData['file_path']);
                 $uploadResult = $this->handleFileUpload();
 
-                $setClauses[] = 'file_path = ?';
-                $setClauses[] = 'file_size = ?';
-                $params[]     = $uploadResult['file_path'] ?? null;
-                $params[]     = $uploadResult['file_size'] ?? null;
+                $updateData['file_path'] = $uploadResult['file_path'] ?? null;
+                $updateData['file_size'] = $uploadResult['file_size'] ?? null;
             }
 
-            foreach (['title', 'communication_type', 'status', 'reference_no', 'date_received'] as $field) {
-                if (isset($data[$field])) {
-                    $setClauses[] = "$field = ?";
-                    $params[]     = $data[$field];
-                }
-            }
-
-            if (empty($setClauses)) {
-                http_response_code(400);
-                $this->response(false, 'No fields to update');
+            if (empty($updateData)) {
+                $this->response(true, 'No changes made to communication', ['communication' => $oldData]);
                 return;
             }
 
-            $setClauses[] = 'updated_at = NOW()';
-            $params[]     = $id;
+            $updateData['updated_at'] = date('Y-m-d H:i:s');
 
-            Database::query(
-                "UPDATE {$this->table} SET " . implode(', ', $setClauses) . " WHERE id = ?",
-                $params
-            );
+            Database::update($this->table, $updateData, 'id = :id', ['id' => $id]);
 
             $this->logAuditTrail($userId, $userName, 'UPDATE', 'COMMUNICATION', $id,
                 $data['title'] ?? $oldData['title'], $oldData, array_merge($oldData, $data ?? []));
 
-            $this->response(true, 'Communication updated successfully');
+            $communication = Database::fetch(
+                "SELECT * FROM {$this->table} WHERE id = ?",
+                [$id]
+            );
+
+            $this->response(true, 'Communication updated successfully', ['communication' => $communication]);
         } catch (Exception $e) {
+            error_log('Communication update error: ' . $e->getMessage());
             $this->error('Failed to update communication', $e);
         }
     }
