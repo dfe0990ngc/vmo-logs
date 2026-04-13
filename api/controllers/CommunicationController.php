@@ -42,9 +42,14 @@ class CommunicationController extends Controller
                 ? "SELECT *, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
                 : "SELECT * FROM {$this->table}";
 
+            // Prepend the search term for the SELECT clause when search is active
+            $queryParams = $hasSearch
+                ? [$_GET['search'], ...$params, $limit, $offset]
+                : [...$params, $limit, $offset];
+
             $communications = Database::fetchAll(
                 "$selectClause $where $orderClause LIMIT ? OFFSET ?",
-                [...$params, $limit, $offset]
+                $queryParams
             );
 
             $this->response(true, 'Communications retrieved successfully', [
@@ -88,9 +93,14 @@ class CommunicationController extends Controller
                 ? "SELECT id, title, communication_type, status, reference_no, date_received, file_name, MATCH(title, reference_no) AGAINST(? IN BOOLEAN MODE) as relevance FROM {$this->table}"
                 : "SELECT id, title, communication_type, status, reference_no, date_received, file_name FROM {$this->table}";
 
+            // Prepend the search term for the SELECT clause when search is active
+            $queryParams = $hasSearch
+                ? [$_GET['search'], ...$params, $limit, $offset]
+                : [...$params, $limit, $offset];
+
             $communications = Database::fetchAll(
                 "$selectClause $where $orderClause LIMIT ? OFFSET ?",
-                [...$params, $limit, $offset]
+                $queryParams
             );
 
             $this->response(true, 'Communications retrieved successfully', [
