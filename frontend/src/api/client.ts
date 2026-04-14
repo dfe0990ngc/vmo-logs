@@ -36,7 +36,6 @@ export function cancelAllRequests() {
 /* Axios Instance */
 /* ------------------------------------------------------------------ */
 
-
 export const API_FOLDER = import.meta.env.VITE_API_FOLDER || '';
 
 export const BASE_URL =
@@ -45,7 +44,7 @@ export const BASE_URL =
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 30000,
+  timeout: 30000, // Default 30s for normal requests
   headers: {
     "Content-Type": "application/json",
     "X-Requested-With": "XMLHttpRequest",
@@ -94,8 +93,16 @@ async function refreshToken(): Promise<string> {
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    // Attach AbortController if missing
-    if (!config.signal) {
+    // Don't attach an auto AbortController to file uploads.
+    // Multipart uploads can take minutes — we don't want cancelAllRequests()
+    // (e.g. triggered by a route change) silently killing them mid-transfer.
+    // The upload() helper in http.ts accepts an optional caller-provided signal
+    // for intentional cancellation instead.
+    const isUpload =
+      config.headers?.["Content-Type"] === "multipart/form-data" ||
+      config.data instanceof FormData;
+
+    if (!config.signal && !isUpload) {
       const controller = createAbortController();
       config.signal = controller.signal;
     }

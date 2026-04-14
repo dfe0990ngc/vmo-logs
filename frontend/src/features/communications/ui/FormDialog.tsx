@@ -94,10 +94,10 @@ function useForm(
         status:             communication.status,
         reference_no:       communication.reference_no ?? "",
         date_received:      communication.date_received ?? "",
-        created_by_name:   communication.created_by_name ?? "",
-        created_at:        communication.created_at ? communication.created_at.replace(" ", "T") : "",
-        updated_by_name:   communication.updated_by_name ?? "",
-        updated_at:        communication.updated_at ? communication.updated_at.replace(" ", "T") : "",
+        created_by_name:    communication.created_by_name ?? "",
+        created_at:         communication.created_at ? communication.created_at.replace(" ", "T") : "",
+        updated_by_name:    communication.updated_by_name ?? "",
+        updated_at:         communication.updated_at ? communication.updated_at.replace(" ", "T") : "",
         file:               null,
       });
     } else if (mode === "create") {
@@ -114,7 +114,10 @@ function useForm(
     setErrors((prev) => ({ ...prev, [field]: "" }));
   };
 
-  return { formData, handleChange };
+  // Expose a full reset so the dialog can clear formData after a successful save
+  const resetForm = () => setFormData({ ...DEFAULT_FORM });
+
+  return { formData, handleChange, resetForm };
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -130,17 +133,22 @@ interface FormDialogProps {
 
 const FormDialog = memo(
   ({ open, onClose, onSave, communication, mode, isSaving }: FormDialogProps) => {
-    const { formData, handleChange: handleFormChange } = useForm(communication, mode);
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { formData, handleChange: handleFormChange, resetForm } = useForm(communication, mode);
+    const [errors, setErrors]                 = useState<Record<string, string>>({});
     const [selectedFileName, setSelectedFileName] = useState<string>("");
-    const [isDragging, setIsDragging] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isDragging, setIsDragging]         = useState(false);
+    const fileInputRef                        = useRef<HTMLInputElement>(null);
 
     const resetFormUI = () => {
       setSelectedFileName("");
       setIsDragging(false);
       setErrors({});
       if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    const resetAll = () => {
+      resetForm();    // clears formData (title, type, status, file, etc.)
+      resetFormUI();  // clears UI-only state (drag, errors, file input element)
     };
 
     const handleChange = (field: keyof FormState, value: string | File | null) => {
@@ -169,10 +177,10 @@ const FormDialog = memo(
       if (file) validateAndSetFile(file);
     };
 
-    const handleDragEnter  = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-    const handleDragLeave  = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
-    const handleDragOver   = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); };
-    const handleDrop       = (e: React.DragEvent<HTMLDivElement>) => {
+    const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+    const handleDragOver  = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); };
+    const handleDrop      = (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault(); e.stopPropagation(); setIsDragging(false);
       const file = e.dataTransfer.files?.[0];
       if (file) validateAndSetFile(file);
@@ -204,13 +212,12 @@ const FormDialog = memo(
       if (formData.reference_no.trim()) submitData.append("reference_no", formData.reference_no.trim());
       if (formData.date_received) {
         const raw = formData.date_received.replace("T", " ");
-        // Only append ':00' seconds if not already present (HH:mm vs HH:mm:ss)
         const dateTime = raw.length === 16 ? raw + ":00" : raw;
         submitData.append("date_received", dateTime);
       }
 
       await onSave(submitData as any);
-      resetFormUI();
+      resetAll(); // clear both formData fields and UI state after successful save
     };
 
     return (
@@ -387,56 +394,30 @@ const FormDialog = memo(
               </div>
             </div>
 
-            {/* Created info */}
+            {/* Created / Updated info (view mode only) */}
             {mode === "view" && (
               <>
-              <div className="gap-4 grid grid-cols-2">
-                {/* Created By Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="created_by_name">Created By</Label>
-                  <Input
-                    id="created_by_name"
-                    readOnly={true}
-                    value={formData.created_by_name}
-                  />
+                <div className="gap-4 grid grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="created_by_name">Created By</Label>
+                    <Input id="created_by_name" readOnly value={formData.created_by_name} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="created_at">Date & Time Created</Label>
+                    <Input id="created_at" type="datetime-local" readOnly value={formData.created_at} className="text-sm" />
+                  </div>
                 </div>
 
-                {/* Created At */}
-                <div className="space-y-2">
-                  <Label htmlFor="created_at">Date & Time Created</Label>
-                  <Input
-                    id="created_at"
-                    type="datetime-local"
-                    readOnly={true}
-                    value={formData.created_at}
-                    className="text-sm"
-                  />
+                <div className="gap-4 grid grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="updated_by_name">Updated By</Label>
+                    <Input id="updated_by_name" readOnly value={formData.updated_by_name} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="updated_at">Date & Time Updated</Label>
+                    <Input id="updated_at" type="datetime-local" readOnly value={formData.updated_at} className="text-sm" />
+                  </div>
                 </div>
-              </div>
-
-              <div className="gap-4 grid grid-cols-2">
-                {/* Updated By Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="updated_by_name">Updated By</Label>
-                  <Input
-                    id="updated_by_name"
-                    readOnly={true}
-                    value={formData.updated_by_name}
-                  />
-                </div>
-
-                {/* Updated At */}
-                <div className="space-y-2">
-                  <Label htmlFor="updated_at">Date & Time Updated</Label>
-                  <Input
-                    id="updated_at"
-                    type="datetime-local"
-                    readOnly={true}
-                    value={formData.updated_at}
-                    className="text-sm"
-                  />
-                </div>
-              </div>
               </>
             )}
           </div>
