@@ -274,7 +274,7 @@ class CommunicationController extends Controller
             }
 
             $rules = [
-                'title'              => 'nullable|string|max:255',
+                'title'              => 'nullable|string',
                 'communication_type' => 'nullable|string|max:50',
                 'status'             => 'nullable|string|max:50',
                 'reference_no'       => 'nullable|string|max:100',
