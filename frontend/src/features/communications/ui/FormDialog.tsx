@@ -353,7 +353,7 @@ const FormDialog = memo(
                   <SelectTrigger className={errors.communication_type ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     {COMM_TYPES.map((ct) => (
                       <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>
                     ))}
